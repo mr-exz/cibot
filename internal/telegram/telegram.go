@@ -7,23 +7,64 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/mr-exz/cibot/internal/linear"
 )
 
+type Category struct {
+	ID    string
+	Label string
+}
+
+var categories = []Category{
+	{ID: "network", Label: "🌐 Network"},
+	{ID: "vm_k8s", Label: "☁️ VM/K8s"},
+	{ID: "database", Label: "🗄️ Database"},
+	{ID: "cicd", Label: "⚙️ CI/CD"},
+	{ID: "incident", Label: "🚨 Incident"},
+	{ID: "feature_request", Label: "✨ Feature Request"},
+	{ID: "access_request", Label: "🔑 Access Request"},
+}
+
+type stateKey struct {
+	UserID int64
+}
+
+type pendingIssue struct {
+	Category    string
+	Title       string
+	Step        string // "category", "title", "description"
+	MessageID   int    // Message ID to edit throughout the flow
+	ChatID      int64  // Chat ID for editing the message
+}
+
 type Handler struct {
 	linear *linear.Client
+	mu     sync.Mutex
+	states map[stateKey]*pendingIssue
 }
 
 func New(ctx context.Context, linearClient *linear.Client) (*tgbot.Bot, error) {
 	token := os.Getenv("TELEGRAM_TOKEN")
-	h := &Handler{linear: linearClient}
+	h := &Handler{
+		linear: linearClient,
+		states: make(map[stateKey]*pendingIssue),
+	}
 	opts := []tgbot.Option{
 		tgbot.WithDefaultHandler(h.handleMessage),
 	}
-	return tgbot.New(token, opts...)
+	b, err := tgbot.New(token, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Register callback query handler for category selection
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "cat:", tgbot.MatchTypePrefix, h.handleCategoryCallback)
+
+	return b, nil
 }
 
 func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *models.Update) {
@@ -37,6 +78,20 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 	// Only process messages from the configured group chat
 	if !isAllowedChat(msg.Chat.ID) {
 		log.Printf("⏭️  Ignoring message from chat_id: %d (not in ALLOWED_CHAT_ID)\n", msg.Chat.ID)
+		return
+	}
+
+	key := stateKey{
+		UserID: msg.From.ID,
+	}
+
+	// Check if user is in pending state (waiting for description)
+	h.mu.Lock()
+	pending, hasPending := h.states[key]
+	h.mu.Unlock()
+
+	if hasPending && !isCommand(msg.Text) {
+		h.handlePendingIssue(ctx, b, msg, pending)
 		return
 	}
 
@@ -61,51 +116,188 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 
 	case "issue":
 		log.Printf("✓ Processing /issue command from chat_id: %d\n", msg.Chat.ID)
-		h.handleIssueCommand(ctx, b, msg)
+		h.handleIssueStart(ctx, b, msg)
 	}
 }
 
-func (h *Handler) handleIssueCommand(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
-	// Extract title and description from message
-	// Format: /issue title | description (description optional)
-	text := msg.Text
-
-	// Find where the command ends (handle /issue@botname)
-	cmdEnd := strings.IndexAny(text, " ")
-	if cmdEnd == -1 {
-		h.sendMessage(ctx, b, msg, "❌ Usage: /issue <title> | <description (optional)>")
-		return
+func (h *Handler) handleIssueStart(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
+	// Create inline keyboard with category buttons (2 per row)
+	rows := make([][]models.InlineKeyboardButton, 0)
+	for i := 0; i < len(categories); i += 2 {
+		row := []models.InlineKeyboardButton{
+			{
+				Text:         categories[i].Label,
+				CallbackData: fmt.Sprintf("cat:%s", categories[i].ID),
+			},
+		}
+		if i+1 < len(categories) {
+			row = append(row, models.InlineKeyboardButton{
+				Text:         categories[i+1].Label,
+				CallbackData: fmt.Sprintf("cat:%s", categories[i+1].ID),
+			})
+		}
+		rows = append(rows, row)
 	}
 
-	// Everything after the command
-	content := strings.TrimSpace(text[cmdEnd:])
-	if content == "" {
-		h.sendMessage(ctx, b, msg, "❌ Usage: /issue <title> | <description (optional)>")
-		return
+	params := &tgbot.SendMessageParams{
+		ChatID: msg.Chat.ID,
+		Text:   "Select issue category:",
+		ReplyMarkup: &models.InlineKeyboardMarkup{
+			InlineKeyboard: rows,
+		},
 	}
-
-	var title, description string
-	if idx := strings.Index(content, "|"); idx != -1 {
-		title = strings.TrimSpace(content[:idx])
-		description = strings.TrimSpace(content[idx+1:])
-	} else {
-		title = content
+	if msg.MessageThreadID != 0 {
+		params.MessageThreadID = msg.MessageThreadID
 	}
-
-	if title == "" {
-		h.sendMessage(ctx, b, msg, "❌ Title cannot be empty")
-		return
-	}
-
-	// Create the issue
-	url, err := h.linear.CreateIssue(ctx, title, description)
+	sentMsg, err := b.SendMessage(ctx, params)
 	if err != nil {
-		log.Printf("❌ Failed to create Linear issue: %v\n", err)
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to create issue: %v", err))
+		log.Printf("❌ Failed to send message: %v\n", err)
 		return
 	}
 
-	h.sendMessage(ctx, b, msg, fmt.Sprintf("✓ Issue created: %s", url))
+	// Store message ID for later editing
+	key := stateKey{
+		UserID: msg.From.ID,
+	}
+	h.mu.Lock()
+	h.states[key] = &pendingIssue{
+		Step:      "category",
+		MessageID: sentMsg.ID,
+		ChatID:    msg.Chat.ID,
+	}
+	h.mu.Unlock()
+}
+
+func (h *Handler) handleCategoryCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+
+	// Access the Message field from MaybeInaccessibleMessage
+	msg := query.Message.Message
+	if msg == nil {
+		return
+	}
+
+	categoryID := strings.TrimPrefix(query.Data, "cat:")
+
+	// Find category label
+	var categoryLabel string
+	for _, cat := range categories {
+		if cat.ID == categoryID {
+			categoryLabel = cat.Label
+			break
+		}
+	}
+	if categoryLabel == "" {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            "❌ Unknown category",
+			ShowAlert:       true,
+		})
+		return
+	}
+
+	// Answer callback to remove loading spinner
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+		Text:            fmt.Sprintf("✓ %s selected", categoryLabel),
+	})
+
+	// Update state with category and move to title step
+	key := stateKey{
+		UserID: query.From.ID,
+	}
+	h.mu.Lock()
+	if pending, exists := h.states[key]; exists {
+		pending.Category = categoryID
+		pending.Step = "title"
+		// Use the stored message ID for editing
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    pending.ChatID,
+			MessageID: pending.MessageID,
+			Text:      fmt.Sprintf("✓ %s selected.\n\n📝 **Title:**", categoryLabel),
+		})
+	}
+	h.mu.Unlock()
+}
+
+func (h *Handler) handlePendingIssue(ctx context.Context, b *tgbot.Bot, msg *models.Message, pending *pendingIssue) {
+	key := stateKey{
+		UserID: msg.From.ID,
+	}
+
+	text := strings.TrimSpace(msg.Text)
+
+	switch pending.Step {
+	case "title":
+		if text == "" {
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:    pending.ChatID,
+				MessageID: pending.MessageID,
+				Text:      "❌ Title cannot be empty",
+			})
+			return
+		}
+		// Delete user's message
+		b.DeleteMessage(ctx, &tgbot.DeleteMessageParams{
+			ChatID:    pending.ChatID,
+			MessageID: msg.ID,
+		})
+
+		// Store title and move to description step
+		h.mu.Lock()
+		pending.Title = text
+		pending.Step = "description"
+		h.mu.Unlock()
+
+		// Edit the message to ask for description
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    pending.ChatID,
+			MessageID: pending.MessageID,
+			Text:      fmt.Sprintf("✓ Title: %s\n\n📄 **Description (optional):**", text),
+		})
+
+	case "description":
+		// Delete user's message
+		b.DeleteMessage(ctx, &tgbot.DeleteMessageParams{
+			ChatID:    pending.ChatID,
+			MessageID: msg.ID,
+		})
+
+		// Create the issue with title + description
+		h.mu.Lock()
+		title := pending.Title
+		delete(h.states, key)
+		h.mu.Unlock()
+
+		description := text // Empty string is OK for description
+
+		// Create the issue
+		url, err := h.linear.CreateIssue(ctx, title, description)
+		if err != nil {
+			log.Printf("❌ Failed to create Linear issue: %v\n", err)
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:    pending.ChatID,
+				MessageID: pending.MessageID,
+				Text:      fmt.Sprintf("❌ Failed to create issue: %v", err),
+			})
+			return
+		}
+
+		// Edit the message with final result
+		descText := description
+		if descText == "" {
+			descText = "(none)"
+		}
+		finalText := fmt.Sprintf("✓ Issue created!\n\n📝 Title: %s\n📄 Description: %s\n\n🔗 %s", title, descText, url)
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    pending.ChatID,
+			MessageID: pending.MessageID,
+			Text:      finalText,
+		})
+	}
 }
 
 func (h *Handler) sendMessage(ctx context.Context, b *tgbot.Bot, msg *models.Message, text string) {
@@ -165,4 +357,9 @@ func isAllowedChat(chatID int64) bool {
 	}
 
 	return false
+}
+
+// isCommand checks if text starts with a slash command
+func isCommand(text string) bool {
+	return strings.HasPrefix(strings.TrimSpace(text), "/")
 }
