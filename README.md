@@ -77,6 +77,8 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
   - Select category and request type
   - Reporter and message link automatically captured in Linear issue
 
+- `/version` — Show bot version and repository link
+
 - `/help` — Show available commands (admin commands shown only to admins)
 
 ### Direct Messages (DMs)

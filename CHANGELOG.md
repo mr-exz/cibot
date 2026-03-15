@@ -2,11 +2,20 @@
 
 ## [0.0.5]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
-
+### Added
+- `/version` command — shows current bot version and repository link
+- Version injected at build time via `-ldflags` from Docker build arg
 
 ## [0.0.4]
-- Logging limits in docker-compose.yml
+
+### Added
+- Docker Compose file for running bot from image
+- Log rotation limit: 15 MB per file, 3 files max
+
+### Changed
+- `/ticket` — now requires replying to a message instead of pasting a link; reporter name and username captured automatically
+- Reporter's Telegram account included in Linear issue description for both `/support` and `/ticket`
+- CI Docker image tagged as `VERSION-BRANCHNAME` instead of `snapshot`
 
 ## [0.0.3]
 
