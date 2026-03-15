@@ -39,4 +39,4 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push snapshot image
-        run: make build TAG=snapshot push
+        run: make build TAG=snapshot && make push TAG=snapshot

@@ -112,8 +112,9 @@ jobs:
         run: |
           VERSION="${{ needs.release.outputs.version }}"
           make build TAG=$VERSION
-          make tag-latest
-          make push
+          make push TAG=$VERSION
+          make tag-latest TAG=$VERSION
+          make push TAG=latest
 
       - name: Prepare for next version
         run: |

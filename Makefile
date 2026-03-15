@@ -11,6 +11,5 @@ tag-latest:
 
 push:
 	docker push $(IMAGE):$(TAG)
-	docker push $(IMAGE):latest
 
 all: build push
