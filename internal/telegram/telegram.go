@@ -4,67 +4,113 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+	"github.com/mr-exz/cibot/internal/config"
 	"github.com/mr-exz/cibot/internal/linear"
+	"github.com/mr-exz/cibot/internal/storage"
 )
-
-type Category struct {
-	ID    string
-	Label string
-}
-
-var categories = []Category{
-	{ID: "network", Label: "🌐 Network"},
-	{ID: "vm_k8s", Label: "☁️ VM/K8s"},
-	{ID: "database", Label: "🗄️ Database"},
-	{ID: "cicd", Label: "⚙️ CI/CD"},
-	{ID: "incident", Label: "🚨 Incident"},
-	{ID: "feature_request", Label: "✨ Feature Request"},
-	{ID: "access_request", Label: "🔑 Access Request"},
-}
 
 type stateKey struct {
 	UserID int64
 }
 
-type pendingIssue struct {
-	Category    string
-	Title       string
-	Step        string // "category", "title", "description"
-	MessageID   int    // Message ID to edit throughout the flow
-	ChatID      int64  // Chat ID for editing the message
-}
-
 type Handler struct {
-	linear *linear.Client
-	mu     sync.Mutex
-	states map[stateKey]*pendingIssue
+	linear      *linear.Client
+	storage     *storage.DB
+	cfg         *config.Config
+	mu          sync.Mutex
+	states      map[stateKey]interface{} // can hold *pendingSession or *pendingAdminSession
+	topics      map[int64]map[int]string // chat_id -> (thread_id -> topic_name)
+	groups      map[int64]string         // chat_id -> group title (discovered from messages)
+	cmdRegistry []commandDef
+	cmdHandlers map[string]cmdHandler
 }
 
-func New(ctx context.Context, linearClient *linear.Client) (*tgbot.Bot, error) {
-	token := os.Getenv("TELEGRAM_TOKEN")
+func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *config.Config) (*tgbot.Bot, error) {
 	h := &Handler{
-		linear: linearClient,
-		states: make(map[stateKey]*pendingIssue),
+		linear:      linearClient,
+		storage:     db,
+		cfg:         cfg,
+		states:      make(map[stateKey]interface{}),
+		topics:      make(map[int64]map[int]string),
+		groups:      make(map[int64]string),
+		cmdHandlers: make(map[string]cmdHandler),
+	}
+
+	// Build command registry — single source of truth for dispatch and /help
+	for _, cmd := range h.registerCommands() {
+		h.cmdRegistry = append(h.cmdRegistry, cmd)
+		h.cmdHandlers[cmd.Name] = cmd.Handler
 	}
 	opts := []tgbot.Option{
 		tgbot.WithDefaultHandler(h.handleMessage),
 	}
-	b, err := tgbot.New(token, opts...)
+	b, err := tgbot.New(cfg.TelegramToken, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	// Register callback query handler for category selection
+	// Register callback query handlers
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "cat:", tgbot.MatchTypePrefix, h.handleCategoryCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "type:", tgbot.MatchTypePrefix, h.handleRequestTypeCallback)
+
+	// Admin flow callbacks
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "grp:", tgbot.MatchTypePrefix, h.handleAdminTopicGroupCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "person:", tgbot.MatchTypePrefix, h.handleAdminPersonCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "rot:", tgbot.MatchTypePrefix, h.handleAdminRotationCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "skip", tgbot.MatchTypeExact, h.handleAdminSkipCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "confirm:", tgbot.MatchTypePrefix, h.handleAdminConfirmCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "topic:", tgbot.MatchTypePrefix, h.handleAdminTopicManualCallback)
+
+	go h.sessionReaper(ctx)
 
 	return b, nil
+}
+
+// sessionReaper runs in the background and removes sessions that have been
+// inactive for more than sessionTTL, freeing memory from abandoned flows.
+const sessionTTL = 30 * time.Minute
+
+func (h *Handler) sessionReaper(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			h.sweepSessions()
+		}
+	}
+}
+
+func (h *Handler) sweepSessions() {
+	cutoff := time.Now().Add(-sessionTTL)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	removed := 0
+	for key, state := range h.states {
+		var createdAt time.Time
+		switch s := state.(type) {
+		case *pendingSession:
+			createdAt = s.CreatedAt
+		case *pendingAdminSession:
+			createdAt = s.CreatedAt
+		}
+		if !createdAt.IsZero() && createdAt.Before(cutoff) {
+			delete(h.states, key)
+			removed++
+		}
+	}
+	if removed > 0 {
+		log.Printf("🧹 Session reaper: removed %d expired sessions", removed)
+	}
 }
 
 func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *models.Update) {
@@ -73,11 +119,27 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 	}
 
 	msg := update.Message
-	log.Printf("📨 Message from chat_id: %d, user: %s, text: %s\n", msg.Chat.ID, msg.From.FirstName, msg.Text)
+	threadInfo := ""
+	if msg.MessageThreadID != 0 {
+		threadInfo = fmt.Sprintf(" [TOPIC #%d]", msg.MessageThreadID)
+	}
+	log.Printf("📨 Message from chat_id: %d, user: %s (@%s), text: %s%s\n", msg.Chat.ID, msg.From.FirstName, msg.From.Username, msg.Text, threadInfo)
 
-	// Only process messages from the configured group chat
-	if !isAllowedChat(msg.Chat.ID) {
-		log.Printf("⏭️  Ignoring message from chat_id: %d (not in ALLOWED_CHAT_ID)\n", msg.Chat.ID)
+	// Cache group name for use in /addtopic flow
+	if msg.Chat.Title != "" {
+		h.mu.Lock()
+		h.groups[msg.Chat.ID] = msg.Chat.Title
+		h.mu.Unlock()
+	}
+
+	// Only process messages from configured chats or private chats from admins
+	chatType := string(msg.Chat.Type)
+	if !h.cfg.IsPrivateChatAllowed(msg.Chat.ID, chatType, msg.From.Username) {
+		reason := "not in ALLOWED_CHAT_ID"
+		if chatType == "private" {
+			reason = "not an admin (DMs only for admins)"
+		}
+		log.Printf("⏭️ Ignoring message from chat_id: %d (%s)\n", msg.Chat.ID, reason)
 		return
 	}
 
@@ -91,8 +153,22 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 	h.mu.Unlock()
 
 	if hasPending && !isCommand(msg.Text) {
-		h.handlePendingIssue(ctx, b, msg, pending)
-		return
+		// Handle pending sessions (support/ticket flows)
+		if pendingSess, ok := pending.(*pendingSession); ok {
+			switch {
+			case pendingSess.Flow == FlowSupport:
+				h.handleSupportPendingIssue(ctx, b, msg, pendingSess)
+			case pendingSess.Flow == FlowTicket && pendingSess.Step == StepTicketLink:
+				h.handleTicketPendingLink(ctx, b, msg, pendingSess)
+			}
+			return
+		}
+
+		// Handle admin pending sessions
+		if adminPending, ok := pending.(*pendingAdminSession); ok {
+			h.handleAdminPendingInput(ctx, b, msg, adminPending)
+			return
+		}
 	}
 
 	// Parse command (handles both /help and /help@botname)
@@ -101,202 +177,29 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 		return
 	}
 
-	switch cmd {
-	case "help":
-		log.Printf("✓ Processing /help command from chat_id: %d\n", msg.Chat.ID)
+	if cmd == "help" {
 		params := &tgbot.SendMessageParams{
 			ChatID: msg.Chat.ID,
-			Text:   "hello world",
+			Text:   h.buildHelpText(msg.From.Username),
 		}
-		// If message is in a topic, reply in the same topic
 		if msg.MessageThreadID != 0 {
 			params.MessageThreadID = msg.MessageThreadID
 		}
-		b.SendMessage(ctx, params)
-
-	case "issue":
-		log.Printf("✓ Processing /issue command from chat_id: %d\n", msg.Chat.ID)
-		h.handleIssueStart(ctx, b, msg)
-	}
-}
-
-func (h *Handler) handleIssueStart(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
-	// Create inline keyboard with category buttons (2 per row)
-	rows := make([][]models.InlineKeyboardButton, 0)
-	for i := 0; i < len(categories); i += 2 {
-		row := []models.InlineKeyboardButton{
-			{
-				Text:         categories[i].Label,
-				CallbackData: fmt.Sprintf("cat:%s", categories[i].ID),
-			},
+		if _, err := b.SendMessage(ctx, params); err != nil {
+			log.Printf("❌ Failed to send help: %v", err)
 		}
-		if i+1 < len(categories) {
-			row = append(row, models.InlineKeyboardButton{
-				Text:         categories[i+1].Label,
-				CallbackData: fmt.Sprintf("cat:%s", categories[i+1].ID),
-			})
-		}
-		rows = append(rows, row)
-	}
-
-	params := &tgbot.SendMessageParams{
-		ChatID: msg.Chat.ID,
-		Text:   "Select issue category:",
-		ReplyMarkup: &models.InlineKeyboardMarkup{
-			InlineKeyboard: rows,
-		},
-	}
-	if msg.MessageThreadID != 0 {
-		params.MessageThreadID = msg.MessageThreadID
-	}
-	sentMsg, err := b.SendMessage(ctx, params)
-	if err != nil {
-		log.Printf("❌ Failed to send message: %v\n", err)
 		return
 	}
 
-	// Store message ID for later editing
-	key := stateKey{
-		UserID: msg.From.ID,
-	}
-	h.mu.Lock()
-	h.states[key] = &pendingIssue{
-		Step:      "category",
-		MessageID: sentMsg.ID,
-		ChatID:    msg.Chat.ID,
-	}
-	h.mu.Unlock()
-}
-
-func (h *Handler) handleCategoryCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
-	query := update.CallbackQuery
-	if query == nil {
-		return
-	}
-
-	// Access the Message field from MaybeInaccessibleMessage
-	msg := query.Message.Message
-	if msg == nil {
-		return
-	}
-
-	categoryID := strings.TrimPrefix(query.Data, "cat:")
-
-	// Find category label
-	var categoryLabel string
-	for _, cat := range categories {
-		if cat.ID == categoryID {
-			categoryLabel = cat.Label
-			break
+	if handler, ok := h.cmdHandlers[cmd]; ok {
+		// Enforce admin-only restriction at dispatch level
+		for _, def := range h.cmdRegistry {
+			if def.Name == cmd && def.AdminOnly && !isAdmin(h.cfg, msg.From.Username) {
+				h.sendMessage(ctx, b, msg, "Access denied.")
+				return
+			}
 		}
-	}
-	if categoryLabel == "" {
-		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
-			CallbackQueryID: query.ID,
-			Text:            "❌ Unknown category",
-			ShowAlert:       true,
-		})
-		return
-	}
-
-	// Answer callback to remove loading spinner
-	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
-		CallbackQueryID: query.ID,
-		Text:            fmt.Sprintf("✓ %s selected", categoryLabel),
-	})
-
-	// Update state with category and move to title step
-	key := stateKey{
-		UserID: query.From.ID,
-	}
-	h.mu.Lock()
-	if pending, exists := h.states[key]; exists {
-		pending.Category = categoryID
-		pending.Step = "title"
-		// Use the stored message ID for editing
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:    pending.ChatID,
-			MessageID: pending.MessageID,
-			Text:      fmt.Sprintf("✓ %s selected.\n\n📝 **Title:**", categoryLabel),
-		})
-	}
-	h.mu.Unlock()
-}
-
-func (h *Handler) handlePendingIssue(ctx context.Context, b *tgbot.Bot, msg *models.Message, pending *pendingIssue) {
-	key := stateKey{
-		UserID: msg.From.ID,
-	}
-
-	text := strings.TrimSpace(msg.Text)
-
-	switch pending.Step {
-	case "title":
-		if text == "" {
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    pending.ChatID,
-				MessageID: pending.MessageID,
-				Text:      "❌ Title cannot be empty",
-			})
-			return
-		}
-		// Delete user's message
-		b.DeleteMessage(ctx, &tgbot.DeleteMessageParams{
-			ChatID:    pending.ChatID,
-			MessageID: msg.ID,
-		})
-
-		// Store title and move to description step
-		h.mu.Lock()
-		pending.Title = text
-		pending.Step = "description"
-		h.mu.Unlock()
-
-		// Edit the message to ask for description
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:    pending.ChatID,
-			MessageID: pending.MessageID,
-			Text:      fmt.Sprintf("✓ Title: %s\n\n📄 **Description (optional):**", text),
-		})
-
-	case "description":
-		// Delete user's message
-		b.DeleteMessage(ctx, &tgbot.DeleteMessageParams{
-			ChatID:    pending.ChatID,
-			MessageID: msg.ID,
-		})
-
-		// Create the issue with title + description
-		h.mu.Lock()
-		title := pending.Title
-		delete(h.states, key)
-		h.mu.Unlock()
-
-		description := text // Empty string is OK for description
-
-		// Create the issue
-		url, err := h.linear.CreateIssue(ctx, title, description)
-		if err != nil {
-			log.Printf("❌ Failed to create Linear issue: %v\n", err)
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    pending.ChatID,
-				MessageID: pending.MessageID,
-				Text:      fmt.Sprintf("❌ Failed to create issue: %v", err),
-			})
-			return
-		}
-
-		// Edit the message with final result
-		descText := description
-		if descText == "" {
-			descText = "(none)"
-		}
-		finalText := fmt.Sprintf("✓ Issue created!\n\n📝 Title: %s\n📄 Description: %s\n\n🔗 %s", title, descText, url)
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:    pending.ChatID,
-			MessageID: pending.MessageID,
-			Text:      finalText,
-		})
+		handler(ctx, b, msg)
 	}
 }
 
@@ -335,31 +238,118 @@ func parseCommand(text string) string {
 	return cmd
 }
 
-// isAllowedChat checks if the message is from the configured group chats
-func isAllowedChat(chatID int64) bool {
-	allowedChatStr := os.Getenv("ALLOWED_CHAT_ID")
-	if allowedChatStr == "" {
-		// If not configured, allow all chats
-		return true
-	}
-
-	// Parse comma-separated list of chat IDs
-	chatIDs := strings.Split(allowedChatStr, ",")
-	for _, idStr := range chatIDs {
-		idStr = strings.TrimSpace(idStr)
-		allowedChat, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			continue
-		}
-		if chatID == allowedChat {
-			return true
-		}
-	}
-
-	return false
-}
-
 // isCommand checks if text starts with a slash command
 func isCommand(text string) bool {
 	return strings.HasPrefix(strings.TrimSpace(text), "/")
+}
+
+// recordTopic stores a discovered topic in memory and database
+func (h *Handler) recordTopic(chatID int64, threadID int, topicName string) {
+	h.mu.Lock()
+	if h.topics[chatID] == nil {
+		h.topics[chatID] = make(map[int]string)
+	}
+	h.topics[chatID][threadID] = topicName
+	h.mu.Unlock()
+
+	// Also save to database (best effort)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := h.storage.SaveTopic(ctx, chatID, threadID, topicName); err != nil {
+		log.Printf("⚠️  Failed to save topic to DB: %v", err)
+	}
+}
+
+// getGroupName returns the cached title for a group, or a fallback string
+func (h *Handler) getGroupName(chatID int64) string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if name, ok := h.groups[chatID]; ok {
+		return name
+	}
+	return fmt.Sprintf("Group %d", chatID)
+}
+
+// getAllTopics returns topics for all known groups (cache + config IDs)
+func (h *Handler) getAllTopics() map[int64]map[int]string {
+	h.mu.Lock()
+	knownIDs := make([]int64, 0, len(h.groups))
+	for id := range h.groups {
+		knownIDs = append(knownIDs, id)
+	}
+	h.mu.Unlock()
+
+	// Merge config chat IDs
+	for _, id := range h.cfg.AllowedChatIDs {
+		found := false
+		for _, kid := range knownIDs {
+			if kid == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			knownIDs = append(knownIDs, id)
+		}
+	}
+
+	result := make(map[int64]map[int]string)
+	for _, chatID := range knownIDs {
+		topics := h.getTopics(chatID)
+		if len(topics) > 0 {
+			result[chatID] = topics
+		}
+	}
+	return result
+}
+
+// getKnownGroups returns all known groups from cache + configured allowed chat IDs
+func (h *Handler) getKnownGroups() map[int64]string {
+	h.mu.Lock()
+	result := make(map[int64]string, len(h.groups))
+	for k, v := range h.groups {
+		result[k] = v
+	}
+	h.mu.Unlock()
+
+	// Fill in any allowed chat IDs not yet seen in cache
+	for _, chatID := range h.cfg.AllowedChatIDs {
+		if _, ok := result[chatID]; !ok {
+			result[chatID] = fmt.Sprintf("Group %d", chatID)
+		}
+	}
+	return result
+}
+
+// getTopics returns all discovered topics for a chat (loads from DB if not in memory)
+func (h *Handler) getTopics(chatID int64) map[int]string {
+	h.mu.Lock()
+	cached := h.topics[chatID]
+	h.mu.Unlock()
+
+	// If not in memory, try loading from database
+	if cached == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		topics, err := h.storage.LoadTopicsForChat(ctx, chatID)
+		if err != nil {
+			log.Printf("⚠️  Failed to load topics from DB: %v", err)
+			return make(map[int]string)
+		}
+
+		// Store in memory for future use
+		h.mu.Lock()
+		h.topics[chatID] = topics
+		h.mu.Unlock()
+
+		return topics
+	}
+
+	// Return a copy to avoid race conditions
+	topicsCopy := make(map[int]string)
+	for k, v := range cached {
+		topicsCopy[k] = v
+	}
+	return topicsCopy
 }
