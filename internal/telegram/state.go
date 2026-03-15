@@ -29,7 +29,6 @@ const (
 	StepRequestType = "request_type"
 	StepTitle       = "title"
 	StepDescription = "description"
-	StepTicketLink  = "ticket_link"
 )
 
 // Admin flow steps
@@ -87,8 +86,9 @@ type pendingSession struct {
 	ThreadID     int
 
 	// ticket-specific fields
-	TicketMsgLink string
-	TicketMsgText string
+	TicketMsgLink    string
+	ReporterUsername string
+	ReporterName     string
 }
 
 // pendingAdminSession represents an in-progress admin configuration session

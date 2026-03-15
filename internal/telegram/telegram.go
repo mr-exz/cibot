@@ -155,11 +155,8 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 	if hasPending && !isCommand(msg.Text) {
 		// Handle pending sessions (support/ticket flows)
 		if pendingSess, ok := pending.(*pendingSession); ok {
-			switch {
-			case pendingSess.Flow == FlowSupport:
+			if pendingSess.Flow == FlowSupport {
 				h.handleSupportPendingIssue(ctx, b, msg, pendingSess)
-			case pendingSess.Flow == FlowTicket && pendingSess.Step == StepTicketLink:
-				h.handleTicketPendingLink(ctx, b, msg, pendingSess)
 			}
 			return
 		}

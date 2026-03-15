@@ -105,7 +105,6 @@ func New(ctx context.Context, path string) (*DB, error) {
 	return db, nil
 }
 
-
 func (d *DB) Close() error {
 	return d.db.Close()
 }

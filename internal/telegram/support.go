@@ -45,17 +45,21 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 		return
 	}
 
+	reporterName := strings.TrimSpace(msg.From.FirstName + " " + msg.From.LastName)
+
 	// Store session state
 	key := stateKey{UserID: msg.From.ID}
 	h.mu.Lock()
 	h.states[key] = &pendingSession{
-		Flow:      FlowSupport,
-		Step:      StepCategory,
-		UserID:    msg.From.ID,
-		MessageID: sentMsg.ID,
-		ChatID:    msg.Chat.ID,
-		ThreadID:  msg.MessageThreadID,
-		CreatedAt: time.Now(),
+		Flow:             FlowSupport,
+		Step:             StepCategory,
+		UserID:           msg.From.ID,
+		MessageID:        sentMsg.ID,
+		ChatID:           msg.Chat.ID,
+		ThreadID:         msg.MessageThreadID,
+		CreatedAt:        time.Now(),
+		ReporterName:     reporterName,
+		ReporterUsername: msg.From.Username,
 	}
 	h.mu.Unlock()
 }
@@ -296,18 +300,23 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 			}
 		}
 
-		// Add Telegram context with message link and summary
+		// Add Telegram context
 		tgLink := formatTelegramLink(msg.Chat.ID, msg.ID)
+		reporter := pending.ReporterName
+		if pending.ReporterUsername != "" {
+			reporter = fmt.Sprintf("%s (@%s)", pending.ReporterName, pending.ReporterUsername)
+		}
+		description += fmt.Sprintf("\n\n---\n\n**📌 Telegram Source**\n"+
+			"- **Reporter:** %s\n"+
+			"- **Chat:** %s\n"+
+			"- **Category:** %s\n"+
+			"- **Type:** %s",
+			reporter,
+			msg.Chat.Title,
+			categoryName,
+			typeName)
 		if tgLink != "" {
-			description += fmt.Sprintf("\n\n---\n\n**📌 Telegram Source**\n"+
-				"- **Chat:** %s\n"+
-				"- **Category:** %s\n"+
-				"- **Type:** %s\n"+
-				"- **Link:** %s",
-				msg.Chat.Title,
-				categoryName,
-				typeName,
-				tgLink)
+			description += fmt.Sprintf("\n- **Link:** %s", tgLink)
 		}
 
 		// Get on-duty support person
