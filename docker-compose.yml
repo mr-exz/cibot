@@ -5,5 +5,8 @@ services:
     env_file: .env
     volumes:
       - ./data:/data
-    environment:
-      DB_PATH: /data/cibot.db
+    logging:
+      driver: json-file
+      options:
+        max-size: "15m"
+        max-file: "3"

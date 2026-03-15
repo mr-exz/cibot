@@ -1,9 +1,7 @@
 # Changelog
 
 ## [0.0.4]
-
-<!-- Prepare for next release: remove this line and write your release notes -->
-
+- Logging limits in docker-compose.yml
 
 ## [0.0.3]
 
