@@ -2,8 +2,7 @@
 
 ## [0.0.6]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
-
+- Fixing github link in `/version` command response
 
 ## [0.0.5]
 

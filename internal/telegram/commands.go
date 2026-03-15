@@ -107,7 +107,7 @@ func (h *Handler) registerCommands() []commandDef {
 }
 
 func (h *Handler) handleVersion(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
-	h.sendMessage(ctx, b, msg, fmt.Sprintf("cibot %s\nhttps://github.com/mrexz/cibot", h.version))
+	h.sendMessage(ctx, b, msg, fmt.Sprintf("cibot %s\nhttps://github.com/mr-exz/cibot", h.version))
 }
 
 // buildHelpText generates the /help message. Admin-only commands are shown
