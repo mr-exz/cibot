@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.7]
+
+<!-- Prepare for next release: remove this line and write your release notes -->
+
+
 ## [0.0.6]
 
 - Fixing github link in `/version` command response
