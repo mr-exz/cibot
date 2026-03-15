@@ -4,7 +4,7 @@ TAG   ?= latest
 .PHONY: build tag-latest push all
 
 build:
-	docker build -t $(IMAGE):$(TAG) .
+	docker build --build-arg VERSION=$(TAG) -t $(IMAGE):$(TAG) .
 
 tag-latest:
 	docker tag $(IMAGE):$(TAG) $(IMAGE):latest

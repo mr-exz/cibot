@@ -23,6 +23,7 @@ type Handler struct {
 	linear      *linear.Client
 	storage     *storage.DB
 	cfg         *config.Config
+	version     string
 	mu          sync.Mutex
 	states      map[stateKey]interface{} // can hold *pendingSession or *pendingAdminSession
 	topics      map[int64]map[int]string // chat_id -> (thread_id -> topic_name)
@@ -31,11 +32,12 @@ type Handler struct {
 	cmdHandlers map[string]cmdHandler
 }
 
-func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *config.Config) (*tgbot.Bot, error) {
+func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *config.Config, version string) (*tgbot.Bot, error) {
 	h := &Handler{
 		linear:      linearClient,
 		storage:     db,
 		cfg:         cfg,
+		version:     version,
 		states:      make(map[stateKey]interface{}),
 		topics:      make(map[int64]map[int]string),
 		groups:      make(map[int64]string),

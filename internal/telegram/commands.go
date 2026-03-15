@@ -30,6 +30,12 @@ var groupOrder = []string{"Support", "Admin", "Topics"}
 func (h *Handler) registerCommands() []commandDef {
 	return []commandDef{
 		{
+			Name:    "version",
+			Desc:    "Show bot version",
+			Group:   "Support",
+			Handler: h.handleVersion,
+		},
+		{
 			Name:    "support",
 			Desc:    "Create a support request",
 			Group:   "Support",
@@ -37,7 +43,7 @@ func (h *Handler) registerCommands() []commandDef {
 		},
 		{
 			Name:    "ticket",
-			Desc:    "Create ticket from a Telegram message link",
+			Desc:    "Reply to a message with this to create a ticket",
 			Group:   "Support",
 			Handler: h.handleTicketStart,
 		},
@@ -98,6 +104,10 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler:   h.handleListTopics,
 		},
 	}
+}
+
+func (h *Handler) handleVersion(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
+	h.sendMessage(ctx, b, msg, fmt.Sprintf("cibot %s\nhttps://github.com/mrexz/cibot", h.version))
 }
 
 // buildHelpText generates the /help message. Admin-only commands are shown

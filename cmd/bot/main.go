@@ -10,6 +10,8 @@ import (
 	"github.com/mr-exz/cibot/internal/telegram"
 )
 
+var version = "dev"
+
 func main() {
 	log.Println("cibot starting...")
 
@@ -32,7 +34,7 @@ func main() {
 	}
 
 	// Initialize Telegram bot
-	bot, err := telegram.New(ctx, linearClient, db, cfg)
+	bot, err := telegram.New(ctx, linearClient, db, cfg, version)
 	if err != nil {
 		log.Fatalf("failed to create bot: %v", err)
 	}

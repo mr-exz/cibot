@@ -73,9 +73,9 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
   - Category and request type added as Linear labels (auto-created if missing)
 
 - `/ticket` — Create ticket from an existing Telegram message (support-assisted)
-  - Bot prompts for a Telegram message link (`https://t.me/c/...`)
+  - Reply to any message with `/ticket` to start the flow
   - Select category and request type
-  - Link stored in Linear issue description
+  - Reporter and message link automatically captured in Linear issue
 
 - `/help` — Show available commands (admin commands shown only to admins)
 
