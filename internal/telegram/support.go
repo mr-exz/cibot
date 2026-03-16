@@ -301,7 +301,7 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 		}
 
 		// Add Telegram context
-		tgLink := formatTelegramLink(msg.Chat.ID, msg.ID)
+		tgLink := formatTelegramLink(msg.Chat.ID, msg.MessageThreadID, msg.ID)
 		reporter := pending.ReporterName
 		if pending.ReporterUsername != "" {
 			reporter = fmt.Sprintf("%s (@%s)", pending.ReporterName, pending.ReporterUsername)

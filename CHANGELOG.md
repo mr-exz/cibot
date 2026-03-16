@@ -2,14 +2,17 @@
 
 ## [0.0.8]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- `/ticket` — reporter correctly taken from `replied.From` (person who posted in the group, not forward origin)
+- Telegram message links now include thread ID for topic messages (`/c/CHATID/THREADID/MSGID`)
 
+### Added
+- Extended `/ticket` debug logging — logs replied message ID, sender, forward status and origin
 
 ## [0.0.7]
 
 ### Fixed
 - `/ticket` — forwarded messages now correctly detect the original sender instead of the forwarder
-- GitHub link typo in `/version` response
 
 ### Added
 - Cancel button (`❌ Cancel`) on category and request type selection keyboards — cancels the flow in-place without sending extra messages

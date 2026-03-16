@@ -94,12 +94,15 @@ func parseTelegramLink(link string) (chatID int64, messageID int, err error) {
 	return 0, 0, fmt.Errorf("invalid Telegram message link format")
 }
 
-// formatTelegramLink creates a Telegram message link from chat ID and message ID
-func formatTelegramLink(chatID int64, messageID int) string {
+// formatTelegramLink creates a Telegram message link from chat ID, optional thread ID, and message ID.
+// Pass threadID=0 when not in a topic thread.
+func formatTelegramLink(chatID int64, threadID int, messageID int) string {
 	if chatID < 0 {
 		// supergroup/channel: chatID = -100XXXXXXXXXX
-		// Extract numeric part: -(1000000000000 + X) = chatID, so X = -chatID - 1000000000000
 		numericID := (-chatID) - 1_000_000_000_000
+		if threadID != 0 {
+			return fmt.Sprintf("https://t.me/c/%d/%d/%d", numericID, threadID, messageID)
+		}
 		return fmt.Sprintf("https://t.me/c/%d/%d", numericID, messageID)
 	}
 	// For public chats we can't create a link from numeric ID alone

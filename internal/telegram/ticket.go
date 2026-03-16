@@ -19,20 +19,15 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 	}
 
 	replied := msg.ReplyToMessage
-	link := formatTelegramLink(msg.Chat.ID, replied.ID)
+	link := formatTelegramLink(msg.Chat.ID, msg.MessageThreadID, replied.ID)
+
+	isForward := replied.ForwardOrigin != nil
+	log.Printf("🎫 /ticket reply target: msg_id=%d, from=%+v, is_forward=%v, forward_origin=%+v",
+		replied.ID, replied.From, isForward, replied.ForwardOrigin)
 
 	reporterName := ""
 	reporterUsername := ""
-	if replied.ForwardOrigin != nil {
-		switch replied.ForwardOrigin.Type {
-		case models.MessageOriginTypeUser:
-			u := replied.ForwardOrigin.MessageOriginUser.SenderUser
-			reporterName = strings.TrimSpace(u.FirstName + " " + u.LastName)
-			reporterUsername = u.Username
-		case models.MessageOriginTypeHiddenUser:
-			reporterName = replied.ForwardOrigin.MessageOriginHiddenUser.SenderUserName
-		}
-	} else if replied.From != nil {
+	if replied.From != nil {
 		reporterName = strings.TrimSpace(replied.From.FirstName + " " + replied.From.LastName)
 		reporterUsername = replied.From.Username
 	}
