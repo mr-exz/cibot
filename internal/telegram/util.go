@@ -36,6 +36,10 @@ func buildKeyboard(items []ButtonItem, prefix string) *models.InlineKeyboardMark
 		rows = append(rows, row)
 	}
 
+	rows = append(rows, []models.InlineKeyboardButton{
+		{Text: "❌ Cancel", CallbackData: "cancel"},
+	})
+
 	return &models.InlineKeyboardMarkup{
 		InlineKeyboard: rows,
 	}

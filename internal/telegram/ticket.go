@@ -23,7 +23,16 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 
 	reporterName := ""
 	reporterUsername := ""
-	if replied.From != nil {
+	if replied.ForwardOrigin != nil {
+		switch replied.ForwardOrigin.Type {
+		case models.MessageOriginTypeUser:
+			u := replied.ForwardOrigin.MessageOriginUser.SenderUser
+			reporterName = strings.TrimSpace(u.FirstName + " " + u.LastName)
+			reporterUsername = u.Username
+		case models.MessageOriginTypeHiddenUser:
+			reporterName = replied.ForwardOrigin.MessageOriginHiddenUser.SenderUserName
+		}
+	} else if replied.From != nil {
 		reporterName = strings.TrimSpace(replied.From.FirstName + " " + replied.From.LastName)
 		reporterUsername = replied.From.Username
 	}
@@ -66,6 +75,32 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 	h.mu.Unlock()
 
 	log.Printf("✓ /ticket started by %s for message from %s (%s)", msg.From.Username, reporterName, reporterUsername)
+}
+
+// handleCancelCallback handles the ❌ Cancel inline button press.
+func (h *Handler) handleCancelCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	userID := query.From.ID
+	key := stateKey{UserID: userID}
+
+	h.mu.Lock()
+	_, had := h.states[key]
+	delete(h.states, key)
+	h.mu.Unlock()
+
+	if !had {
+		return
+	}
+
+	msg := query.Message.Message
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:    msg.Chat.ID,
+		MessageID: msg.ID,
+		Text:      "❌ Cancelled.",
+	})
+	log.Printf("✓ Flow cancelled by %s", query.From.Username)
 }
 
 // createTicketIssue creates a Linear issue from the ticket data

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.7]
+
+### Fixed
+- `/ticket` — forwarded messages now correctly detect the original sender instead of the forwarder
+- GitHub link typo in `/version` response
+
+### Added
+- Cancel button (`❌ Cancel`) on category and request type selection keyboards — cancels the flow in-place without sending extra messages
+
 ## [0.0.6]
 
 - Fixing github link in `/version` command response

@@ -65,6 +65,7 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "grp:", tgbot.MatchTypePrefix, h.handleAdminTopicGroupCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "person:", tgbot.MatchTypePrefix, h.handleAdminPersonCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "rot:", tgbot.MatchTypePrefix, h.handleAdminRotationCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "cancel", tgbot.MatchTypeExact, h.handleCancelCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "skip", tgbot.MatchTypeExact, h.handleAdminSkipCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "confirm:", tgbot.MatchTypePrefix, h.handleAdminConfirmCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "topic:", tgbot.MatchTypePrefix, h.handleAdminTopicManualCallback)
