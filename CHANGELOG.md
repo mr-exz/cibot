@@ -2,8 +2,8 @@
 
 ## [0.0.9]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
-
+### Fixed
+- `/ticket` — rejects usage when user replies to topic header instead of a real message, with a clear error
 
 ## [0.0.8]
 
