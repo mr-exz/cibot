@@ -2,7 +2,8 @@
 
 ## [0.0.14]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- Set label flow now shows only approved groups from DB instead of in-memory cache
 
 
 ## [0.0.13]

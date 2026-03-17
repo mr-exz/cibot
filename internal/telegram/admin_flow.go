@@ -994,12 +994,26 @@ func (h *Handler) handleAdminSetLabelPending(ctx context.Context, b *tgbot.Bot, 
 		return
 	}
 
-	groups := h.getKnownGroups()
-	if len(groups) == 0 {
+	allGroups, err := h.storage.ListGroups(ctx)
+	if err != nil {
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      "❌ No known groups yet.",
+			Text:      fmt.Sprintf("❌ Failed to load groups: %v", err),
+		})
+		return
+	}
+	approvedGroups := make(map[int64]string)
+	for _, g := range allGroups {
+		if g.Approved {
+			approvedGroups[g.ChatID] = g.Title
+		}
+	}
+	if len(approvedGroups) == 0 {
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    admin.ChatID,
+			MessageID: admin.MessageID,
+			Text:      "❌ No approved groups yet. Approve groups via /groups first.",
 		})
 		h.mu.Lock()
 		delete(h.states, stateKey{UserID: admin.UserID})
@@ -1016,7 +1030,7 @@ func (h *Handler) handleAdminSetLabelPending(ctx context.Context, b *tgbot.Bot, 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      admin.ChatID,
 		MessageID:   admin.MessageID,
-		Text:        fmt.Sprintf("✓ Label: *%s*\n\n🏘 Select the group:", label),
-		ReplyMarkup: buildGroupKeyboard(groups),
+		Text:        fmt.Sprintf("✓ Label: %s\n\n🏘 Select the group:", label),
+		ReplyMarkup: buildGroupKeyboard(approvedGroups),
 	})
 }
