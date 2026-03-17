@@ -2,7 +2,8 @@
 
 ## [0.0.11]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/setlabel @username <label>` admin command — assigns a display label to a user in the group chat
 
 
 ## [0.0.10]

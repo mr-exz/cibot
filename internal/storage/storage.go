@@ -440,6 +440,26 @@ func (d *DB) ListAllOnDuty(ctx context.Context, today time.Time) ([]CategoryDuty
 	return duties, nil
 }
 
+// === User Labels ===
+
+func (d *DB) SetUserLabel(ctx context.Context, telegramUsername, label string) error {
+	_, err := d.db.ExecContext(ctx,
+		`INSERT INTO user_labels (telegram_username, label) VALUES (?, ?)
+		 ON CONFLICT(telegram_username) DO UPDATE SET label = excluded.label`,
+		telegramUsername, label)
+	return err
+}
+
+func (d *DB) GetUserLabel(ctx context.Context, telegramUsername string) (string, error) {
+	var label string
+	err := d.db.QueryRowContext(ctx,
+		"SELECT label FROM user_labels WHERE telegram_username = ?", telegramUsername).Scan(&label)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return label, err
+}
+
 // === Helper to create initial assignment ===
 
 func (d *DB) CreateInitialAssignment(ctx context.Context, categoryID int64, supportPersonID int64, rotationType string, startDate string) error {

@@ -11,6 +11,27 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
+// handleSetLabel sets a label for a Telegram user: /setlabel @username label text
+func (h *Handler) handleSetLabel(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
+	// Parse: /setlabel @username label text
+	parts := strings.Fields(msg.Text)
+	if len(parts) < 3 || !strings.HasPrefix(parts[1], "@") {
+		h.sendMessage(ctx, b, msg, "Usage: /setlabel @username label")
+		return
+	}
+
+	username := strings.TrimPrefix(parts[1], "@")
+	label := strings.Join(parts[2:], " ")
+
+	if err := h.storage.SetUserLabel(ctx, username, label); err != nil {
+		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to set label: %v", err))
+		return
+	}
+
+	log.Printf("✓ Label set for @%s: %s (by %s)", username, label, msg.From.Username)
+	h.sendMessage(ctx, b, msg, fmt.Sprintf("✅ Label for @%s set to: %s", username, label))
+}
+
 // handleAddCategory starts the /addcategory interactive flow
 func (h *Handler) handleAddCategory(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	log.Printf("📝 /addcategory from %s (chat_id: %d, thread_id: %d)", msg.From.Username, msg.Chat.ID, msg.MessageThreadID)
