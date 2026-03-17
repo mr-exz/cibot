@@ -980,6 +980,7 @@ func (h *Handler) handleAdminSkipCallback(ctx context.Context, b *tgbot.Bot, upd
 // ===== /setlabel flow =====
 
 func (h *Handler) handleAdminSetLabelPending(ctx context.Context, b *tgbot.Bot, msg *models.Message, admin *pendingAdminSession) {
+	log.Printf("🏷 setlabel pending: step=%s user=%d text=%q", admin.Step, admin.LabelUserID, msg.Text)
 	if admin.Step != StepAdminSetLabelWaitLabel {
 		return
 	}
@@ -1027,10 +1028,15 @@ func (h *Handler) handleAdminSetLabelPending(ctx context.Context, b *tgbot.Bot, 
 	h.states[stateKey{UserID: admin.UserID}] = admin
 	h.mu.Unlock()
 
-	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+	_, err = b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      admin.ChatID,
 		MessageID:   admin.MessageID,
 		Text:        fmt.Sprintf("✓ Label: %s\n\n🏘 Select the group:", label),
 		ReplyMarkup: buildGroupKeyboard(approvedGroups),
 	})
+	if err != nil {
+		log.Printf("❌ setlabel EditMessageText failed: %v", err)
+	} else {
+		log.Printf("✓ setlabel group keyboard shown for label=%q user=%d", label, admin.LabelUserID)
+	}
 }

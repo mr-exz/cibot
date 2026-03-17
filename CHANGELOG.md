@@ -2,7 +2,8 @@
 
 ## [0.0.15]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- Added debug logging to set label flow to trace failures after label input
 
 
 ## [0.0.14]
