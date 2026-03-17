@@ -90,6 +90,13 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler:   h.handleRotation,
 		},
 		{
+			Name:      "granttags",
+			Desc:      "Grant the bot can_manage_tags permission in this group",
+			Group:     "Admin",
+			AdminOnly: true,
+			Handler:   h.handleGrantTags,
+		},
+		{
 			Name:      "groups",
 			Desc:      "List and approve/disapprove groups",
 			Group:     "Admin",

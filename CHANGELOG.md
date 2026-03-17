@@ -2,7 +2,8 @@
 
 ## [0.0.16]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/granttags` admin command — promotes the bot with `can_manage_tags` permission in the current group (requires "Add New Admins" enabled temporarily)
 
 
 ## [0.0.15]

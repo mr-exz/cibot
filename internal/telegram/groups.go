@@ -11,6 +11,30 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
+func (h *Handler) handleGrantTags(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
+	if string(msg.Chat.Type) == "private" {
+		h.sendMessage(ctx, b, msg, "❌ Run this command inside the group where you want to enable tags.")
+		return
+	}
+
+	// Parse bot ID from token (format: "BOT_ID:secret")
+	token := h.cfg.TelegramToken
+	var botUserID int64
+	if _, err := fmt.Sscanf(strings.Split(token, ":")[0], "%d", &botUserID); err != nil {
+		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to parse bot ID: %v", err))
+		return
+	}
+
+	if err := promoteBotWithManageTags(ctx, token, msg.Chat.ID, botUserID); err != nil {
+		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to grant tags permission: %v", err))
+		log.Printf("❌ granttags failed in chat %d: %v", msg.Chat.ID, err)
+		return
+	}
+
+	h.sendMessage(ctx, b, msg, "✅ Tags permission granted. You can now disable \"Add New Admins\" for the bot.")
+	log.Printf("✓ can_manage_tags granted in chat %d by @%s", msg.Chat.ID, msg.From.Username)
+}
+
 func (h *Handler) handleGroups(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	h.sendGroupsList(ctx, b, msg.Chat.ID, 0)
 }
