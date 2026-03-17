@@ -28,6 +28,8 @@ func (h *Handler) handleAdminPendingInput(ctx context.Context, b *tgbot.Bot, msg
 		h.handleAdminSetWorkHoursPending(ctx, b, msg, admin)
 	case AdminCmdAddTopic:
 		h.handleAdminAddTopicPending(ctx, b, msg, admin)
+	case AdminCmdSetLabel:
+		h.handleAdminSetLabelPending(ctx, b, msg, admin)
 	}
 }
 
@@ -860,6 +862,27 @@ func (h *Handler) handleAdminTopicGroupCallback(ctx context.Context, b *tgbot.Bo
 		return
 	}
 
+	if adminPending.Cmd == AdminCmdSetLabel && adminPending.Step == StepAdminSetLabelGroup {
+		if err := setChatMemberTag(ctx, h.cfg.TelegramToken, selectedChatID, adminPending.LabelUserID, adminPending.LabelText); err != nil {
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:    adminPending.ChatID,
+				MessageID: adminPending.MessageID,
+				Text:      fmt.Sprintf("❌ Failed to set tag: %v", err),
+			})
+		} else {
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:    adminPending.ChatID,
+				MessageID: adminPending.MessageID,
+				Text:      fmt.Sprintf("✅ Tag *%s* set for @%s", adminPending.LabelText, adminPending.LabelUsername),
+			})
+			log.Printf("✓ Tag set for user %d (@%s) in chat %d: %s", adminPending.LabelUserID, adminPending.LabelUsername, selectedChatID, adminPending.LabelText)
+		}
+		h.mu.Lock()
+		delete(h.states, key)
+		h.mu.Unlock()
+		return
+	}
+
 	if adminPending.Cmd != AdminCmdAddTopic {
 		return
 	}
@@ -952,4 +975,48 @@ func (h *Handler) handleAdminSkipCallback(ctx context.Context, b *tgbot.Bot, upd
 
 	// Re-trigger the pending handler as if user typed "skip"
 	h.handleAdminPendingInput(ctx, b, mockMsg, adminPending)
+}
+
+// ===== /setlabel flow =====
+
+func (h *Handler) handleAdminSetLabelPending(ctx context.Context, b *tgbot.Bot, msg *models.Message, admin *pendingAdminSession) {
+	if admin.Step != StepAdminSetLabelWaitLabel {
+		return
+	}
+
+	label := strings.TrimSpace(msg.Text)
+	if label == "" || len([]rune(label)) > 16 {
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    admin.ChatID,
+			MessageID: admin.MessageID,
+			Text:      "❌ Label must be 1–16 characters.",
+		})
+		return
+	}
+
+	groups := h.getKnownGroups()
+	if len(groups) == 0 {
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    admin.ChatID,
+			MessageID: admin.MessageID,
+			Text:      "❌ No known groups yet.",
+		})
+		h.mu.Lock()
+		delete(h.states, stateKey{UserID: admin.UserID})
+		h.mu.Unlock()
+		return
+	}
+
+	admin.LabelText = label
+	admin.Step = StepAdminSetLabelGroup
+	h.mu.Lock()
+	h.states[stateKey{UserID: admin.UserID}] = admin
+	h.mu.Unlock()
+
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      admin.ChatID,
+		MessageID:   admin.MessageID,
+		Text:        fmt.Sprintf("✓ Label: *%s*\n\n🏘 Select the group:", label),
+		ReplyMarkup: buildGroupKeyboard(groups),
+	})
 }

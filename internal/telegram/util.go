@@ -1,7 +1,11 @@
 package telegram
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -120,6 +124,41 @@ func formatMediaLinks(mediaLinks []string) string {
 		sb.WriteString(fmt.Sprintf("\n%d. [Attachment](%s)", i+1, link))
 	}
 	return sb.String()
+}
+
+// setChatMemberTag calls the Bot API 9.5 setChatMemberTag method directly.
+// tag can be empty to remove the tag.
+func setChatMemberTag(ctx context.Context, token string, chatID int64, userID int64, tag string) error {
+	payload, _ := json.Marshal(map[string]interface{}{
+		"chat_id": chatID,
+		"user_id": userID,
+		"tag":     tag,
+	})
+
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/setChatMemberTag", token)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		OK          bool   `json:"ok"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+	if !result.OK {
+		return fmt.Errorf("telegram: %s", result.Description)
+	}
+	return nil
 }
 
 // isAdmin checks if a user is an admin

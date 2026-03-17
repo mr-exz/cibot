@@ -155,6 +155,13 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 	pending, hasPending := h.states[key]
 	h.mu.Unlock()
 
+	// In DM: admin forwards a user message → start setlabel flow
+	if !hasPending && string(msg.Chat.Type) == "private" && isAdmin(h.cfg, msg.From.Username) &&
+		msg.ForwardOrigin != nil && msg.ForwardOrigin.Type == models.MessageOriginTypeUser {
+		h.handleSetLabelForward(ctx, b, msg)
+		return
+	}
+
 	if hasPending && !isCommand(msg.Text) {
 		// Handle pending sessions (support/ticket flows)
 		if pendingSess, ok := pending.(*pendingSession); ok {

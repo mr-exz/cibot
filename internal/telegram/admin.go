@@ -11,25 +11,33 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
-// handleSetLabel sets a label for a Telegram user: /setlabel @username label text
-func (h *Handler) handleSetLabel(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
-	// Parse: /setlabel @username label text
-	parts := strings.Fields(msg.Text)
-	if len(parts) < 3 || !strings.HasPrefix(parts[1], "@") {
-		h.sendMessage(ctx, b, msg, "Usage: /setlabel @username label")
+// handleSetLabelForward is triggered when an admin forwards a user message to the bot in DM.
+// It starts the setlabel flow: capture user ID → ask for label → pick group → call setChatMemberTag.
+func (h *Handler) handleSetLabelForward(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
+	origin := msg.ForwardOrigin.MessageOriginUser.SenderUser
+	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
+		ChatID: msg.Chat.ID,
+		Text:   fmt.Sprintf("👤 User: %s (@%s)\n\n✏️ Enter the label to set:", strings.TrimSpace(origin.FirstName+" "+origin.LastName), origin.Username),
+	})
+	if err != nil {
+		log.Printf("❌ handleSetLabelForward send: %v", err)
 		return
 	}
 
-	username := strings.TrimPrefix(parts[1], "@")
-	label := strings.Join(parts[2:], " ")
-
-	if err := h.storage.SetUserLabel(ctx, username, label); err != nil {
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to set label: %v", err))
-		return
+	key := stateKey{UserID: msg.From.ID}
+	h.mu.Lock()
+	h.states[key] = &pendingAdminSession{
+		Cmd:           AdminCmdSetLabel,
+		Step:          StepAdminSetLabelWaitLabel,
+		MessageID:     sentMsg.ID,
+		ChatID:        msg.Chat.ID,
+		CreatedAt:     time.Now(),
+		UserID:        msg.From.ID,
+		LabelUserID:   origin.ID,
+		LabelUsername: origin.Username,
 	}
-
-	log.Printf("✓ Label set for @%s: %s (by %s)", username, label, msg.From.Username)
-	h.sendMessage(ctx, b, msg, fmt.Sprintf("✅ Label for @%s set to: %s", username, label))
+	h.mu.Unlock()
+	log.Printf("✓ setlabel flow started for user %d (@%s) by %s", origin.ID, origin.Username, msg.From.Username)
 }
 
 // handleAddCategory starts the /addcategory interactive flow

@@ -2,8 +2,8 @@
 
 ## [0.0.12]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
-
+### Added
+- Set Telegram member tag flow: admin forwards a user message to bot in DM → types label (1–16 chars) → selects group → tag set via `setChatMemberTag` (Bot API 9.5)
 
 ## [0.0.11]
 

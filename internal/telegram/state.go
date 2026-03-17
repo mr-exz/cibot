@@ -21,6 +21,7 @@ const (
 	AdminCmdSetRotation  AdminCmd = "setrotation"
 	AdminCmdSetWorkHours AdminCmd = "setworkhours"
 	AdminCmdAddTopic     AdminCmd = "addtopic"
+	AdminCmdSetLabel     AdminCmd = "setlabel"
 )
 
 // Step constants for the multi-step issue creation flow
@@ -66,6 +67,10 @@ const (
 	// addcategory manual topic steps (DM flow)
 	StepAdminCatManualGroup   = "admin_cat_manual_group"
 	StepAdminCatManualTopicID = "admin_topic_manual_id"
+
+	// setlabel steps (DM flow: forward a user message → type label → pick group)
+	StepAdminSetLabelWaitLabel = "admin_setlabel_wait_label"
+	StepAdminSetLabelGroup     = "admin_setlabel_group"
 )
 
 // pendingSession represents an in-progress issue creation session for a user
@@ -123,4 +128,9 @@ type pendingAdminSession struct {
 
 	// addcategory DM flow: the group the category should belong to
 	TargetGroupChatID int64
+
+	// setlabel fields
+	LabelUserID   int64
+	LabelUsername string
+	LabelText     string
 }
