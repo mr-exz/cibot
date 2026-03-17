@@ -126,47 +126,6 @@ func formatMediaLinks(mediaLinks []string) string {
 	return sb.String()
 }
 
-// promoteBotWithManageTags calls promoteChatMember to grant the bot can_manage_tags in a group.
-func promoteBotWithManageTags(ctx context.Context, token string, chatID int64, botUserID int64) error {
-	payload, _ := json.Marshal(map[string]interface{}{
-		"chat_id":          chatID,
-		"user_id":          botUserID,
-		"can_manage_tags":  true,
-		"can_manage_chat":  true,
-		"can_delete_messages": true,
-		"can_restrict_members": true,
-		"can_invite_users": true,
-		"can_pin_messages": true,
-		"can_manage_topics": true,
-		"can_manage_video_chats": true,
-	})
-
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/promoteChatMember", token)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		OK          bool   `json:"ok"`
-		Description string `json:"description"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-	if !result.OK {
-		return fmt.Errorf("telegram: %s", result.Description)
-	}
-	return nil
-}
-
 // setChatMemberTag calls the Bot API 9.5 setChatMemberTag method directly.
 // tag can be empty to remove the tag.
 func setChatMemberTag(ctx context.Context, token string, chatID int64, userID int64, tag string) error {

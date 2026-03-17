@@ -5,12 +5,13 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 ## Features
 
 - **Self-service issue creation** (`/support`) — interactive flow with category, request type, title, description, optional media
-- **Support-assisted tickets** (`/ticket`) — paste a Telegram message link, bot creates a Linear issue from it
+- **Support-assisted tickets** (`/ticket`) — reply to any message with `/ticket` to create a Linear issue with reporter, message body, and link auto-captured
 - **Automatic support rotation** (daily/weekly) with on-duty assignment and work-hours awareness
+- **Multi-group support** — bot works across multiple group chats; groups approved/disapproved via `/groups`
+- **Member tagging** — admin forwards a user message to bot in DM to set a Telegram tag on that user in any approved group (Bot API 9.5)
 - **Admin commands** for managing categories, topics, support staff, and rotation — usable via DM or group
 - **Linear label auto-creation** — category and request type labels created automatically if missing
-- **SQLite persistence** — categories, request types, support assignments, topics stored in database
-- **Migrations** via `golang-migrate` — versioned, applied once on startup
+- **SQLite persistence** — all configuration stored in database with versioned migrations via `golang-migrate`
 
 ## Core components
 
@@ -59,7 +60,6 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 - `TELEGRAM_TOKEN` (required) — Bot token from @BotFather
 - `LINEAR_API_KEY` (required) — Linear API key
 - `DB_PATH` (optional, default: `cibot.db`) — SQLite database file path
-- `ALLOWED_CHAT_ID` (optional) — Comma-separated Telegram chat IDs to respond to (if empty, responds to all)
 - `ADMIN_USERNAMES` (optional) — Comma-separated Telegram usernames allowed to use admin commands (with or without @)
   - Example: `ADMIN_USERNAMES=@alice,@charlie`
 
@@ -95,6 +95,8 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 - `/addtopic` — Register a forum topic (group → name → topic ID)
 - `/topics` — List all registered topics *(admin only)*
 - `/rotation` — Show current on-duty assignments *(admin only)*
+- `/groups` — List all known groups with approve/disapprove buttons *(DM only)*
+- **Set member tag** — Forward any user message to the bot in DM → enter label (1–16 chars) → select group → tag applied
 
 ## Setup
 
@@ -104,13 +106,15 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
    ```bash
    TELEGRAM_TOKEN=your_bot_token
    LINEAR_API_KEY=your_linear_key
-   ALLOWED_CHAT_ID=your_group_chat_id
    ADMIN_USERNAMES=@alice,@bob
    ```
 4. Run the bot:
    ```bash
    go run ./cmd/bot
    ```
-5. Add the bot to your group chat
-6. Use `/addtopic` to register forum topics, `/addcategory`, `/addtype`, `/addperson` to configure support (all via DM or group)
-7. Users can now use `/support` or `/ticket` to create issues
+5. Add the bot to your group chats as **admin** with the following permissions:
+   - Change Group Info, Delete Messages, Ban Users, Add Members, Pin Messages, Manage Topics, Manage Video Chats
+   - **Manage Tags** — required for `/setlabel` (set member tags via Bot API 9.5)
+6. DM the bot with `/groups` to approve the groups where it should operate
+7. Use `/addtopic`, `/addcategory`, `/addtype`, `/addperson` to configure support (all via DM or group)
+8. Users can now use `/support` or `/ticket` to create issues

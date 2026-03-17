@@ -2,7 +2,11 @@
 
 ## [0.0.17]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Removed
+- `/granttags` command — bot cannot promote itself; manage permissions manually in group settings
+
+### Changed
+- README updated: setup instructions, bot permission requirements, member tag flow documented
 
 
 ## [0.0.16]
