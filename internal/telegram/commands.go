@@ -90,6 +90,13 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler:   h.handleRotation,
 		},
 		{
+			Name:      "groups",
+			Desc:      "List and approve/disapprove groups",
+			Group:     "Admin",
+			AdminOnly: true,
+			Handler:   h.handleGroups,
+		},
+		{
 			Name:      "addtopic",
 			Desc:      "Register a forum topic",
 			Group:     "Topics",

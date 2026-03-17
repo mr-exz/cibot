@@ -2,7 +2,12 @@
 
 ## [0.0.13]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- Group approval system — bot auto-registers groups on first message, only works in approved groups
+- `/groups` admin command — lists all known groups with approve/disapprove inline buttons, updated in place
+
+### Removed
+- `ALLOWED_CHAT_ID` env var — replaced by DB-driven group approval
 
 
 ## [0.0.12]

@@ -440,6 +440,66 @@ func (d *DB) ListAllOnDuty(ctx context.Context, today time.Time) ([]CategoryDuty
 	return duties, nil
 }
 
+// === Group Chats ===
+
+type GroupChat struct {
+	ChatID   int64
+	Title    string
+	Approved bool
+	AddedAt  string
+}
+
+// RegisterGroup adds a group to the database if not already present (unapproved by default).
+func (d *DB) RegisterGroup(ctx context.Context, chatID int64, title string) error {
+	_, err := d.db.ExecContext(ctx,
+		`INSERT INTO group_chats (chat_id, title) VALUES (?, ?)
+		 ON CONFLICT(chat_id) DO UPDATE SET title = excluded.title`,
+		chatID, title)
+	return err
+}
+
+// SetGroupApproved sets the approved state for a group.
+func (d *DB) SetGroupApproved(ctx context.Context, chatID int64, approved bool) error {
+	v := 0
+	if approved {
+		v = 1
+	}
+	_, err := d.db.ExecContext(ctx, "UPDATE group_chats SET approved = ? WHERE chat_id = ?", v, chatID)
+	return err
+}
+
+// IsGroupApproved returns true if the group is approved.
+func (d *DB) IsGroupApproved(ctx context.Context, chatID int64) (bool, error) {
+	var approved int
+	err := d.db.QueryRowContext(ctx, "SELECT approved FROM group_chats WHERE chat_id = ?", chatID).Scan(&approved)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return approved == 1, err
+}
+
+// ListGroups returns all known groups ordered by approved desc, added_at asc.
+func (d *DB) ListGroups(ctx context.Context) ([]GroupChat, error) {
+	rows, err := d.db.QueryContext(ctx,
+		"SELECT chat_id, title, approved, added_at FROM group_chats ORDER BY approved DESC, added_at ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var groups []GroupChat
+	for rows.Next() {
+		var g GroupChat
+		var approved int
+		if err := rows.Scan(&g.ChatID, &g.Title, &approved, &g.AddedAt); err != nil {
+			return nil, err
+		}
+		g.Approved = approved == 1
+		groups = append(groups, g)
+	}
+	return groups, rows.Err()
+}
+
 // === User Labels ===
 
 func (d *DB) SetUserLabel(ctx context.Context, telegramUsername, label string) error {
