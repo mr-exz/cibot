@@ -2,7 +2,9 @@
 
 ## [0.0.20]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- `/ticket` — removed topic root message guard that incorrectly blocked tickets in groups with a default General topic (where the first message ID equals the thread ID)
+- `/addtopic` — group list now reads from DB instead of in-memory cache, so all approved groups are shown regardless of bot restart
 
 
 ## [0.0.19]

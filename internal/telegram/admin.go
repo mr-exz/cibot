@@ -240,9 +240,23 @@ func (h *Handler) handleSetWorkHours(ctx context.Context, b *tgbot.Bot, msg *mod
 
 // handleAddTopic starts the /addtopic interactive flow
 func (h *Handler) handleAddTopic(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
-	groups := h.getKnownGroups()
+	allGroups, err := h.storage.ListGroups(ctx)
+	if err != nil {
+		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to load groups: %v", err))
+		return
+	}
+	groups := make(map[int64]string)
+	for _, g := range allGroups {
+		if g.Approved {
+			title := g.Title
+			if title == "" {
+				title = fmt.Sprintf("Group %d", g.ChatID)
+			}
+			groups[g.ChatID] = title
+		}
+	}
 	if len(groups) == 0 {
-		h.sendMessage(ctx, b, msg, "❌ No groups discovered yet. Send any message in the target group first so the bot sees it.")
+		h.sendMessage(ctx, b, msg, "❌ No approved groups yet. Approve groups via /groups first.")
 		return
 	}
 

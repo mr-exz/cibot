@@ -20,13 +20,6 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 
 	replied := msg.ReplyToMessage
 
-	// In a forum topic the root message has the same ID as the thread ID.
-	// If the user replied to the topic root instead of a real message, reject it.
-	if msg.MessageThreadID != 0 && replied.ID == msg.MessageThreadID {
-		h.sendMessage(ctx, b, msg, "❌ Please reply to the specific message you want to create a ticket for, not the topic header.")
-		return
-	}
-
 	link := formatTelegramLink(msg.Chat.ID, msg.MessageThreadID, replied.ID)
 
 	isForward := replied.ForwardOrigin != nil
