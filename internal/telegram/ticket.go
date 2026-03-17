@@ -72,6 +72,8 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		ThreadID:         msg.MessageThreadID,
 		CreatedAt:        time.Now(),
 		TicketMsgLink:    link,
+		TicketMsgBody:    replied.Text,
+		TicketMsgDate:    time.Unix(int64(replied.Date), 0),
 		ReporterName:     reporterName,
 		ReporterUsername: reporterUsername,
 	}
@@ -106,9 +108,25 @@ func (h *Handler) handleCancelCallback(ctx context.Context, b *tgbot.Bot, update
 	log.Printf("✓ Flow cancelled by %s", query.From.Username)
 }
 
+// ticketTitle builds a Linear issue title from the first 5 words of the message body and its date.
+func ticketTitle(body string, date time.Time) string {
+	words := strings.Fields(body)
+	if len(words) > 5 {
+		words = words[:5]
+	}
+	snippet := strings.Join(words, " ")
+	if len(strings.Fields(body)) > 5 {
+		snippet += "..."
+	}
+	return fmt.Sprintf("%s (%s)", snippet, date.Format("2006-01-02 15:04"))
+}
+
 // createTicketIssue creates a Linear issue from the ticket data
 func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *pendingSession) {
-	title := fmt.Sprintf("[%s] Ticket from Telegram", pending.CategoryName)
+	title := ticketTitle(pending.TicketMsgBody, pending.TicketMsgDate)
+	if title == "" || strings.TrimSpace(pending.TicketMsgBody) == "" {
+		title = fmt.Sprintf("[%s] Ticket from Telegram (%s)", pending.CategoryName, pending.TicketMsgDate.Format("2006-01-02 15:04"))
+	}
 
 	reporter := pending.ReporterName
 	if pending.ReporterUsername != "" {
@@ -124,6 +142,10 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 		pending.CategoryName,
 		pending.TypeName,
 		pending.TicketMsgLink)
+
+	if pending.TicketMsgBody != "" {
+		description = fmt.Sprintf("**💬 Message**\n%s\n\n", pending.TicketMsgBody) + description
+	}
 
 	// Get on-duty support person
 	onDutyResult, err := h.storage.GetOnDutyPersonResult(ctx, pending.CategoryID, time.Now())

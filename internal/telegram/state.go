@@ -87,6 +87,8 @@ type pendingSession struct {
 
 	// ticket-specific fields
 	TicketMsgLink    string
+	TicketMsgBody    string
+	TicketMsgDate    time.Time
 	ReporterUsername string
 	ReporterName     string
 }
