@@ -2,7 +2,9 @@
 
 ## [0.0.18]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/categories` admin command — lists all categories with their current scope (global / group / topic); tap any category to change scope or delete it
+- Category detail view: Make Global, Group-level, Topic-level, Delete — all inline, no extra messages
 
 
 ## [0.0.17]

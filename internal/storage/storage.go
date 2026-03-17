@@ -225,6 +225,18 @@ func (d *DB) GetCategory(ctx context.Context, categoryID int64) (*Category, erro
 	return &cat, nil
 }
 
+func (d *DB) UpdateCategoryScope(ctx context.Context, categoryID int64, chatID *int64, threadID *int) error {
+	_, err := d.db.ExecContext(ctx,
+		"UPDATE categories SET chat_id = ?, thread_id = ? WHERE id = ?",
+		chatID, threadID, categoryID)
+	return err
+}
+
+func (d *DB) DeleteCategory(ctx context.Context, categoryID int64) error {
+	_, err := d.db.ExecContext(ctx, "DELETE FROM categories WHERE id = ?", categoryID)
+	return err
+}
+
 // === Request Types ===
 
 func (d *DB) ListRequestTypesForCategory(ctx context.Context, categoryID int64) ([]RequestType, error) {

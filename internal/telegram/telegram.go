@@ -71,6 +71,7 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "skip", tgbot.MatchTypeExact, h.handleAdminSkipCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "confirm:", tgbot.MatchTypePrefix, h.handleAdminConfirmCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "topic:", tgbot.MatchTypePrefix, h.handleAdminTopicManualCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "catmgr:", tgbot.MatchTypePrefix, h.handleCategoryManagerCallback)
 
 	go h.sessionReaper(ctx)
 

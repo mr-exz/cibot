@@ -97,6 +97,13 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler:   h.handleGroups,
 		},
 		{
+			Name:      "categories",
+			Desc:      "Manage category scopes",
+			Group:     "Admin",
+			AdminOnly: true,
+			Handler:   h.handleManageCategories,
+		},
+		{
 			Name:      "addtopic",
 			Desc:      "Register a forum topic",
 			Group:     "Topics",
