@@ -12,6 +12,7 @@ import (
 	"github.com/go-telegram/bot/models"
 	"github.com/mr-exz/cibot/internal/config"
 	"github.com/mr-exz/cibot/internal/linear"
+	"github.com/mr-exz/cibot/internal/msglog"
 	"github.com/mr-exz/cibot/internal/storage"
 )
 
@@ -24,6 +25,7 @@ type Handler struct {
 	storage     *storage.DB
 	cfg         *config.Config
 	version     string
+	msglog      *msglog.Logger
 	mu          sync.Mutex
 	states      map[stateKey]interface{} // can hold *pendingSession or *pendingAdminSession
 	topics      map[int64]map[int]string // chat_id -> (thread_id -> topic_name)
@@ -38,6 +40,7 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 		storage:     db,
 		cfg:         cfg,
 		version:     version,
+		msglog:      msglog.New(cfg.CSVPath),
 		states:      make(map[stateKey]interface{}),
 		topics:      make(map[int64]map[int]string),
 		groups:      make(map[int64]string),
@@ -130,6 +133,9 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 		threadInfo = fmt.Sprintf(" [TOPIC #%d]", msg.MessageThreadID)
 	}
 	log.Printf("📨 Message from chat_id: %d, user: %s (@%s), text: %s%s\n", msg.Chat.ID, msg.From.FirstName, msg.From.Username, msg.Text, threadInfo)
+
+	// Log every message to CSV regardless of approval/admin status
+	h.logMessage(msg)
 
 	chatType := string(msg.Chat.Type)
 

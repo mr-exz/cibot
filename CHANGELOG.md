@@ -2,7 +2,11 @@
 
 ## [0.0.19]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- Message logging — every message (groups + DMs) is appended to a CSV file with columns: timestamp, chat_type, chat_id, chat_title, thread_id, topic_name, user_id, username, first_name, last_name, message_id, text
+- Media-only messages logged with placeholders: `[photo]`, `[video]`, `[document]`, `[sticker]`, etc.
+- `/export` admin DM command — sends the current CSV as a file attachment, then resets the log
+- `MESSAGES_CSV` env var — path for the message log file (default: `messages.csv`)
 
 
 ## [0.0.18]

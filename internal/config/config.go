@@ -11,6 +11,7 @@ type Config struct {
 	LinearAPIKey   string
 	AdminUsernames map[string]bool // telegram username -> true (username without @)
 	DBPath         string
+	CSVPath        string
 }
 
 func Load() *Config {
@@ -18,6 +19,7 @@ func Load() *Config {
 		TelegramToken:  os.Getenv("TELEGRAM_TOKEN"),
 		LinearAPIKey:   os.Getenv("LINEAR_API_KEY"),
 		DBPath:         os.Getenv("DB_PATH"),
+		CSVPath:        os.Getenv("MESSAGES_CSV"),
 		AdminUsernames: make(map[string]bool),
 	}
 
@@ -32,6 +34,11 @@ func Load() *Config {
 	// Default DB path
 	if cfg.DBPath == "" {
 		cfg.DBPath = "cibot.db"
+	}
+
+	// Default CSV path
+	if cfg.CSVPath == "" {
+		cfg.CSVPath = "messages.csv"
 	}
 
 	// Parse ADMIN_USERNAMES (comma-separated Telegram usernames, with or without @)
