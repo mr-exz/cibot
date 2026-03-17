@@ -2,8 +2,8 @@
 
 ## [0.0.10]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
-
+### Added
+- `/ticket` — Added extra metadata in summary and added description.
 
 ## [0.0.9]
 
