@@ -2,7 +2,8 @@
 
 ## [0.0.21]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- Set label flow — forwarding a new user message in DM now always restarts the flow, even when a previous session is stuck at the group-selection step
 
 
 ## [0.0.20]
