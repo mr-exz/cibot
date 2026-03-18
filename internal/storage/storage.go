@@ -532,6 +532,83 @@ func (d *DB) GetUserLabel(ctx context.Context, telegramUsername string) (string,
 	return label, err
 }
 
+// === Telegram User Metadata ===
+
+type TelegramUser struct {
+	UserID    int64
+	Username  string
+	FirstName string
+	LastName  string
+}
+
+// UpsertUserMeta stores or updates a user's profile data seen from any message.
+func (d *DB) UpsertUserMeta(ctx context.Context, userID int64, username, firstName, lastName string) error {
+	_, err := d.db.ExecContext(ctx,
+		`INSERT INTO telegram_user_metadata (user_id, username, first_name, last_name, last_seen_at)
+		 VALUES (?, ?, ?, ?, datetime('now'))
+		 ON CONFLICT(user_id) DO UPDATE SET
+		     username     = excluded.username,
+		     first_name   = excluded.first_name,
+		     last_name    = excluded.last_name,
+		     last_seen_at = excluded.last_seen_at`,
+		userID, username, firstName, lastName)
+	return err
+}
+
+// LookupUserByUsername returns the stored user_id for a given @username, or 0 if not found.
+func (d *DB) LookupUserByUsername(ctx context.Context, username string) (int64, error) {
+	var userID int64
+	err := d.db.QueryRowContext(ctx,
+		"SELECT user_id FROM telegram_user_metadata WHERE username = ? LIMIT 1", username).Scan(&userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return userID, err
+}
+
+// GetUserByID returns a single user by their Telegram user_id, or nil if not found.
+func (d *DB) GetUserByID(ctx context.Context, userID int64) (*TelegramUser, error) {
+	var u TelegramUser
+	err := d.db.QueryRowContext(ctx,
+		"SELECT user_id, COALESCE(username,''), first_name, last_name FROM telegram_user_metadata WHERE user_id = ?",
+		userID).Scan(&u.UserID, &u.Username, &u.FirstName, &u.LastName)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+// ListUsers returns a page of known users ordered by last_seen_at desc.
+func (d *DB) ListUsers(ctx context.Context, limit, offset int) ([]TelegramUser, error) {
+	rows, err := d.db.QueryContext(ctx,
+		"SELECT user_id, COALESCE(username,''), first_name, last_name FROM telegram_user_metadata ORDER BY last_seen_at DESC LIMIT ? OFFSET ?",
+		limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []TelegramUser
+	for rows.Next() {
+		var u TelegramUser
+		if err := rows.Scan(&u.UserID, &u.Username, &u.FirstName, &u.LastName); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
+// CountUsers returns the total number of known users.
+func (d *DB) CountUsers(ctx context.Context) (int, error) {
+	var n int
+	err := d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM telegram_user_metadata").Scan(&n)
+	return n, err
+}
+
 // === Helper to create initial assignment ===
 
 func (d *DB) CreateInitialAssignment(ctx context.Context, categoryID int64, supportPersonID int64, rotationType string, startDate string) error {

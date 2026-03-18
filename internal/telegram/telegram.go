@@ -30,6 +30,7 @@ type Handler struct {
 	states      map[stateKey]interface{} // can hold *pendingSession or *pendingAdminSession
 	topics      map[int64]map[int]string // chat_id -> (thread_id -> topic_name)
 	groups      map[int64]string         // chat_id -> group title (discovered from messages)
+	knownUsers  map[int64]string         // user_id -> "username\x00first\x00last" fingerprint; skip DB write if unchanged
 	cmdRegistry []commandDef
 	cmdHandlers map[string]cmdHandler
 }
@@ -44,6 +45,7 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 		states:      make(map[stateKey]interface{}),
 		topics:      make(map[int64]map[int]string),
 		groups:      make(map[int64]string),
+		knownUsers:  make(map[int64]string),
 		cmdHandlers: make(map[string]cmdHandler),
 	}
 
@@ -75,6 +77,8 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "confirm:", tgbot.MatchTypePrefix, h.handleAdminConfirmCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "topic:", tgbot.MatchTypePrefix, h.handleAdminTopicManualCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "catmgr:", tgbot.MatchTypePrefix, h.handleCategoryManagerCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usr:", tgbot.MatchTypePrefix, h.handleUserSelectCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usrp:", tgbot.MatchTypePrefix, h.handleUserPageCallback)
 
 	go h.sessionReaper(ctx)
 
@@ -156,6 +160,26 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 		if err != nil || !approved {
 			log.Printf("⏭️ Ignoring message from unapproved group %d\n", msg.Chat.ID)
 			return
+		}
+	}
+
+	// Autodiscover user metadata — only write to DB when profile data changes.
+	if msg.From != nil {
+		fp := msg.From.Username + "\x00" + msg.From.FirstName + "\x00" + msg.From.LastName
+		h.mu.Lock()
+		changed := h.knownUsers[msg.From.ID] != fp
+		if changed {
+			h.knownUsers[msg.From.ID] = fp
+		}
+		h.mu.Unlock()
+		if changed {
+			go func() {
+				ctx2, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				defer cancel()
+				if err := h.storage.UpsertUserMeta(ctx2, msg.From.ID, msg.From.Username, msg.From.FirstName, msg.From.LastName); err != nil {
+					log.Printf("⚠️  UpsertUserMeta: %v", err)
+				}
+			}()
 		}
 	}
 

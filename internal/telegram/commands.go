@@ -104,6 +104,13 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler:   h.handleManageCategories,
 		},
 		{
+			Name:      "users",
+			Desc:      "List known users and set member tags",
+			Group:     "Admin",
+			AdminOnly: true,
+			Handler:   h.handleUsers,
+		},
+		{
 			Name:      "export",
 			Desc:      "Export message log as CSV and reset it",
 			Group:     "Admin",

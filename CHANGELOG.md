@@ -2,7 +2,12 @@
 
 ## [0.0.22]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- User autodiscovery — bot stores `user_id`, username, and display name for every user seen in approved groups; only writes to DB when profile data changes
+- `/users` admin command — paginated list of all known users with a **🏷 Set Tag** button per user; tapping a user starts the setlabel flow directly without needing to forward a message
+
+### Fixed
+- Set label flow now works from `/users` selection, bypassing the forward-message limitation that blocked tag assignment when bot permissions denied reading user data from forwards
 
 
 ## [0.0.21]

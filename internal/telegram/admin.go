@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -309,6 +310,160 @@ func (h *Handler) handleListTopics(ctx context.Context, b *tgbot.Bot, msg *model
 
 	sb.WriteString("\nUse /addcategory to link categories to topics.")
 	h.sendMessage(ctx, b, msg, sb.String())
+}
+
+const usersPageSize = 20
+
+// handleUsers lists all known users from telegram_user_metadata with Set Tag buttons.
+func (h *Handler) handleUsers(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
+	h.sendUsersPage(ctx, b, msg.Chat.ID, 0, 0)
+}
+
+func (h *Handler) sendUsersPage(ctx context.Context, b *tgbot.Bot, chatID int64, existingMsgID int, offset int) {
+	total, err := h.storage.CountUsers(ctx)
+	if err != nil {
+		b.SendMessage(ctx, &tgbot.SendMessageParams{ChatID: chatID, Text: fmt.Sprintf("❌ %v", err)})
+		return
+	}
+	if total == 0 {
+		b.SendMessage(ctx, &tgbot.SendMessageParams{ChatID: chatID, Text: "📭 No users seen yet."})
+		return
+	}
+
+	users, err := h.storage.ListUsers(ctx, usersPageSize, offset)
+	if err != nil {
+		b.SendMessage(ctx, &tgbot.SendMessageParams{ChatID: chatID, Text: fmt.Sprintf("❌ %v", err)})
+		return
+	}
+
+	rows := make([][]models.InlineKeyboardButton, 0, len(users)+1)
+	for _, u := range users {
+		label := strings.TrimSpace(u.FirstName + " " + u.LastName)
+		if u.Username != "" {
+			label += " (@" + u.Username + ")"
+		}
+		rows = append(rows, []models.InlineKeyboardButton{{
+			Text:         "🏷 " + label,
+			CallbackData: fmt.Sprintf("usr:%d", u.UserID),
+		}})
+	}
+
+	// Pagination row
+	var navRow []models.InlineKeyboardButton
+	if offset > 0 {
+		navRow = append(navRow, models.InlineKeyboardButton{
+			Text:         "◀ Prev",
+			CallbackData: fmt.Sprintf("usrp:%d", offset-usersPageSize),
+		})
+	}
+	if offset+usersPageSize < total {
+		navRow = append(navRow, models.InlineKeyboardButton{
+			Text:         "▶ Next",
+			CallbackData: fmt.Sprintf("usrp:%d", offset+usersPageSize),
+		})
+	}
+	if len(navRow) > 0 {
+		rows = append(rows, navRow)
+	}
+
+	text := fmt.Sprintf("👥 Known users (%d–%d of %d):", offset+1, min(offset+len(users), total), total)
+	keyboard := &models.InlineKeyboardMarkup{InlineKeyboard: rows}
+
+	if existingMsgID != 0 {
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:      chatID,
+			MessageID:   existingMsgID,
+			Text:        text,
+			ReplyMarkup: keyboard,
+		})
+	} else {
+		b.SendMessage(ctx, &tgbot.SendMessageParams{
+			ChatID:      chatID,
+			Text:        text,
+			ReplyMarkup: keyboard,
+		})
+	}
+}
+
+// handleUserPageCallback handles ◀/▶ pagination in /users list.
+func (h *Handler) handleUserPageCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	offset, err := strconv.Atoi(strings.TrimPrefix(query.Data, "usrp:"))
+	if err != nil {
+		return
+	}
+	msg := query.Message.Message
+	if msg == nil {
+		return
+	}
+	h.sendUsersPage(ctx, b, msg.Chat.ID, msg.ID, offset)
+}
+
+// handleUserSelectCallback handles tapping a user in /users — starts the setlabel flow.
+func (h *Handler) handleUserSelectCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+
+	userID, err := strconv.ParseInt(strings.TrimPrefix(query.Data, "usr:"), 10, 64)
+	if err != nil {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		return
+	}
+
+	targetUser, err := h.storage.GetUserByID(ctx, userID)
+	if err != nil || targetUser == nil {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID, Text: "User not found"})
+		return
+	}
+
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	msg := query.Message.Message
+	if msg == nil {
+		return
+	}
+
+	displayName := strings.TrimSpace(targetUser.FirstName + " " + targetUser.LastName)
+	if targetUser.Username != "" {
+		displayName += " (@" + targetUser.Username + ")"
+	}
+
+	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
+		ChatID: msg.Chat.ID,
+		Text:   fmt.Sprintf("👤 %s\n\n✏️ Enter the label to set:", displayName),
+	})
+	if err != nil {
+		return
+	}
+
+	key := stateKey{UserID: query.From.ID}
+	h.mu.Lock()
+	h.states[key] = &pendingAdminSession{
+		Cmd:           AdminCmdSetLabel,
+		Step:          StepAdminSetLabelWaitLabel,
+		MessageID:     sentMsg.ID,
+		ChatID:        msg.Chat.ID,
+		CreatedAt:     time.Now(),
+		UserID:        query.From.ID,
+		LabelUserID:   targetUser.UserID,
+		LabelUsername: targetUser.Username,
+	}
+	h.mu.Unlock()
+	log.Printf("✓ setlabel flow started for user %d (@%s) via /users by %s", targetUser.UserID, targetUser.Username, query.From.Username)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // handleRotation shows current on-duty support persons for all categories
