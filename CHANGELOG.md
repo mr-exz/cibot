@@ -2,7 +2,8 @@
 
 ## [0.0.23]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- 🗑 Clear tag button next to each user in `/users` — skips label input, goes straight to group selection, and clears the tag via `setChatMemberTag` with an empty string
 
 
 ## [0.0.22]

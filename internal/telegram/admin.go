@@ -342,10 +342,16 @@ func (h *Handler) sendUsersPage(ctx context.Context, b *tgbot.Bot, chatID int64,
 		if u.Username != "" {
 			label += " (@" + u.Username + ")"
 		}
-		rows = append(rows, []models.InlineKeyboardButton{{
-			Text:         "🏷 " + label,
-			CallbackData: fmt.Sprintf("usr:%d", u.UserID),
-		}})
+		rows = append(rows, []models.InlineKeyboardButton{
+			{
+				Text:         "🏷 " + label,
+				CallbackData: fmt.Sprintf("usr:%d", u.UserID),
+			},
+			{
+				Text:         "🗑",
+				CallbackData: fmt.Sprintf("usrc:%d", u.UserID),
+			},
+		})
 	}
 
 	// Pagination row
@@ -457,6 +463,79 @@ func (h *Handler) handleUserSelectCallback(ctx context.Context, b *tgbot.Bot, up
 	}
 	h.mu.Unlock()
 	log.Printf("✓ setlabel flow started for user %d (@%s) via /users by %s", targetUser.UserID, targetUser.Username, query.From.Username)
+}
+
+// handleUserClearCallback handles 🗑 — starts the clear-tag flow (skips label input, empty tag).
+func (h *Handler) handleUserClearCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+
+	userID, err := strconv.ParseInt(strings.TrimPrefix(query.Data, "usrc:"), 10, 64)
+	if err != nil {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		return
+	}
+
+	targetUser, err := h.storage.GetUserByID(ctx, userID)
+	if err != nil || targetUser == nil {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID, Text: "User not found"})
+		return
+	}
+
+	allGroups, err := h.storage.ListGroups(ctx)
+	if err != nil {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID, Text: "Failed to load groups"})
+		return
+	}
+	approvedGroups := make(map[int64]string)
+	for _, g := range allGroups {
+		if g.Approved {
+			approvedGroups[g.ChatID] = g.Title
+		}
+	}
+	if len(approvedGroups) == 0 {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID, Text: "No approved groups"})
+		return
+	}
+
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	msg := query.Message.Message
+	if msg == nil {
+		return
+	}
+
+	displayName := strings.TrimSpace(targetUser.FirstName + " " + targetUser.LastName)
+	if targetUser.Username != "" {
+		displayName += " (@" + targetUser.Username + ")"
+	}
+
+	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
+		ChatID:      msg.Chat.ID,
+		Text:        fmt.Sprintf("🗑 Clear tag for %s\n\n🏘 Select the group:", displayName),
+		ReplyMarkup: buildGroupKeyboard(approvedGroups),
+	})
+	if err != nil {
+		return
+	}
+
+	key := stateKey{UserID: query.From.ID}
+	h.mu.Lock()
+	h.states[key] = &pendingAdminSession{
+		Cmd:           AdminCmdSetLabel,
+		Step:          StepAdminSetLabelGroup,
+		MessageID:     sentMsg.ID,
+		ChatID:        msg.Chat.ID,
+		CreatedAt:     time.Now(),
+		UserID:        query.From.ID,
+		LabelUserID:   targetUser.UserID,
+		LabelUsername: targetUser.Username,
+		LabelText:     "", // empty = clear
+	}
+	h.mu.Unlock()
+	log.Printf("✓ cleartag flow started for user %d (@%s) by %s", targetUser.UserID, targetUser.Username, query.From.Username)
 }
 
 func min(a, b int) int {

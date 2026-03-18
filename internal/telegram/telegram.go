@@ -78,6 +78,7 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "topic:", tgbot.MatchTypePrefix, h.handleAdminTopicManualCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "catmgr:", tgbot.MatchTypePrefix, h.handleCategoryManagerCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usr:", tgbot.MatchTypePrefix, h.handleUserSelectCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usrc:", tgbot.MatchTypePrefix, h.handleUserClearCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usrp:", tgbot.MatchTypePrefix, h.handleUserPageCallback)
 
 	go h.sessionReaper(ctx)
