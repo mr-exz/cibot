@@ -54,8 +54,7 @@ func (h *Handler) handleAdminAddCategoryPending(ctx context.Context, b *tgbot.Bo
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      h.catProgressText(admin) + "\n\n😀 **Enter emoji:**",
-			ParseMode: models.ParseModeMarkdown,
+			Text:      h.catProgressText(admin) + "\n\n😀 Enter emoji:",
 		})
 
 	case StepAdminCatEmoji:
@@ -68,8 +67,7 @@ func (h *Handler) handleAdminAddCategoryPending(ctx context.Context, b *tgbot.Bo
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      h.catProgressText(admin) + "\n\n⌨️ **Enter Linear team key (e.g., INFRA):**",
-			ParseMode: models.ParseModeMarkdown,
+			Text:      h.catProgressText(admin) + "\n\n⌨️ Enter Linear team key (e.g., INFRA):",
 		})
 
 	case StepAdminCatTeamKey:
@@ -576,8 +574,7 @@ func (h *Handler) handleAdminConfirmCallback(ctx context.Context, b *tgbot.Bot, 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    adminPending.ChatID,
 			MessageID: adminPending.MessageID,
-			Text:      h.catProgressText(adminPending) + "\n\n📝 **Enter category name:**",
-			ParseMode: models.ParseModeMarkdown,
+			Text:      h.catProgressText(adminPending) + "\n\n📝 Enter category name:",
 		})
 	} else {
 		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
@@ -640,8 +637,7 @@ func (h *Handler) handleAdminTopicManualCallback(ctx context.Context, b *tgbot.B
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    adminPending.ChatID,
 		MessageID: adminPending.MessageID,
-		Text:      h.catProgressText(adminPending) + "\n\n📝 **Enter category name:**",
-		ParseMode: models.ParseModeMarkdown,
+		Text:      h.catProgressText(adminPending) + "\n\n📝 Enter category name:",
 	})
 }
 
@@ -823,8 +819,7 @@ func (h *Handler) handleAdminTopicGroupCallback(ctx context.Context, b *tgbot.Bo
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    adminPending.ChatID,
 				MessageID: adminPending.MessageID,
-				Text:      fmt.Sprintf("🏘️ %s  ·  🌐 Global\n\n📝 **Enter category name:**", h.getGroupName(selectedChatID)),
-				ParseMode: models.ParseModeMarkdown,
+				Text:      fmt.Sprintf("🏘️ %s  ·  🌐 Global\n\n📝 Enter category name:", h.getGroupName(selectedChatID)),
 			})
 		}
 		return

@@ -2,7 +2,8 @@
 
 ## [0.0.26]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- `/addcategory` — `EditMessageText` calls that embedded user-provided strings (group name, topic name) with `ParseMode: Markdown` silently failed when names contained `_`, `*`, or `[`; removed `ParseMode` from all category-flow message edits so the UI always updates
 
 
 ## [0.0.25]
