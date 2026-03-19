@@ -323,18 +323,46 @@ func (h *Handler) getGroupName(chatID int64) string {
 	return fmt.Sprintf("Group %d", chatID)
 }
 
-// getAllTopics returns topics for all known groups
+// getAllTopics returns topics for all known groups, loading from DB to catch
+// groups that haven't sent messages since the bot started.
 func (h *Handler) getAllTopics() map[int64]map[int]string {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Load all topics from DB first — this catches groups not yet in h.groups cache
+	dbTopics, err := h.storage.LoadAllTopics(ctx)
+	if err != nil {
+		log.Printf("⚠️  Failed to load all topics from DB: %v", err)
+		dbTopics = make(map[int64]map[int]string)
+	}
+
+	// Merge with in-memory cache (in-memory is more recent for active sessions)
 	h.mu.Lock()
-	knownIDs := make([]int64, 0, len(h.groups))
-	for id := range h.groups {
-		knownIDs = append(knownIDs, id)
+	for chatID, memTopics := range h.topics {
+		if dbTopics[chatID] == nil {
+			dbTopics[chatID] = memTopics
+		} else {
+			for threadID, name := range memTopics {
+				dbTopics[chatID][threadID] = name
+			}
+		}
 	}
 	h.mu.Unlock()
 
+	// Also populate h.groups for any new chat IDs from DB so getGroupName works
+	dbGroups, err := h.storage.ListGroups(ctx)
+	if err == nil {
+		h.mu.Lock()
+		for _, g := range dbGroups {
+			if _, ok := h.groups[g.ChatID]; !ok && g.Title != "" {
+				h.groups[g.ChatID] = g.Title
+			}
+		}
+		h.mu.Unlock()
+	}
+
 	result := make(map[int64]map[int]string)
-	for _, chatID := range knownIDs {
-		topics := h.getTopics(chatID)
+	for chatID, topics := range dbTopics {
 		if len(topics) > 0 {
 			result[chatID] = topics
 		}

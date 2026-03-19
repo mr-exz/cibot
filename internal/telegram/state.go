@@ -64,9 +64,9 @@ const (
 	StepAdminTopicName        = "admin_topic_name"
 	StepAdminTopicID          = "admin_topic_id"
 
-	// addcategory manual topic steps (DM flow)
-	StepAdminCatManualGroup   = "admin_cat_manual_group"
-	StepAdminCatManualTopicID = "admin_topic_manual_id"
+	// addcategory selection steps
+	StepAdminCatSelectGroup = "admin_cat_select_group"
+	StepAdminCatSelectTopic = "admin_cat_select_topic"
 
 	// setlabel steps (DM flow: forward a user message → type label → pick group)
 	StepAdminSetLabelWaitLabel = "admin_setlabel_wait_label"

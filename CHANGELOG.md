@@ -2,7 +2,12 @@
 
 ## [0.0.24]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/addcategory` flow — group and topic selection moved to the start: command now opens a group picker first, then a topic picker (if the group has registered topics), then proceeds to name → emoji → team key; context header (`🏘️ Group · 📌 Topic`) shown throughout all text-entry steps
+
+### Fixed
+- `/addcategory` — registered topics not shown when running the command from DM after a bot restart; `getAllTopics` now loads directly from DB instead of relying on the in-memory group cache
+- Missing ❌ Cancel button in topic selection and topic-confirm keyboards
 
 
 ## [0.0.23]

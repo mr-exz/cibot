@@ -43,13 +43,36 @@ func (h *Handler) handleSetLabelForward(ctx context.Context, b *tgbot.Bot, msg *
 
 // handleAddCategory starts the /addcategory interactive flow
 func (h *Handler) handleAddCategory(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
-	log.Printf("📝 /addcategory from %s (chat_id: %d, thread_id: %d)", msg.From.Username, msg.Chat.ID, msg.MessageThreadID)
+	log.Printf("📝 /addcategory from %s (chat_id: %d)", msg.From.Username, msg.Chat.ID)
+
+	dbGroups, err := h.storage.ListGroups(ctx)
+	if err != nil {
+		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to load groups: %v", err))
+		return
+	}
+
+	groups := make(map[int64]string)
+	for _, g := range dbGroups {
+		if g.Approved {
+			groups[g.ChatID] = g.Title
+		}
+	}
+
+	if len(groups) == 0 {
+		h.sendMessage(ctx, b, msg, "⚠️ No approved groups registered yet.")
+		return
+	}
+
+	keyboard := buildGroupKeyboard(groups)
+	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []models.InlineKeyboardButton{{
+		Text: "❌ Cancel", CallbackData: "cancel",
+	}})
 
 	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
 		ChatID:          msg.Chat.ID,
-		Text:            "📝 **Enter category name:**",
+		Text:            "🏘️ Select group:",
 		MessageThreadID: msg.MessageThreadID,
-		ParseMode:       models.ParseModeMarkdown,
+		ReplyMarkup:     keyboard,
 	})
 	if err != nil {
 		log.Printf("❌ Failed to send message: %v", err)
@@ -60,15 +83,15 @@ func (h *Handler) handleAddCategory(ctx context.Context, b *tgbot.Bot, msg *mode
 	h.mu.Lock()
 	h.states[key] = &pendingAdminSession{
 		Cmd:       AdminCmdAddCategory,
-		Step:      StepAdminCatName,
+		Step:      StepAdminCatSelectGroup,
 		MessageID: sentMsg.ID,
 		ChatID:    msg.Chat.ID,
-		ThreadID:  msg.MessageThreadID,
 		UserID:    msg.From.ID,
+		CreatedAt: time.Now(),
 	}
 	h.mu.Unlock()
 
-	log.Printf("✓ Started /addcategory flow for %s (thread_id=%d)", msg.From.Username, msg.MessageThreadID)
+	log.Printf("✓ Started /addcategory flow for %s", msg.From.Username)
 }
 
 // handleAddType starts the /addtype interactive flow

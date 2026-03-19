@@ -41,121 +41,66 @@ func (h *Handler) handleAdminAddCategoryPending(ctx context.Context, b *tgbot.Bo
 		return
 	}
 
-	// Handle manual topic ID entry (from DM)
-	if admin.Step == StepAdminCatManualTopicID {
-		topicID, err := strconv.Atoi(text)
-		if err != nil || topicID < 0 {
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    admin.ChatID,
-				MessageID: admin.MessageID,
-				Text:      "❌ Invalid topic ID. Must be a positive number.",
-			})
-			return
-		}
-
-		admin.ThreadID = topicID
-		h.addCategoryNow(ctx, b, msg.From.ID, admin)
-		return
-	}
+	key := stateKey{UserID: msg.From.ID}
 
 	switch admin.Step {
 	case StepAdminCatName:
-		// Store name and ask for emoji
 		admin.CategoryName = text
 		admin.Step = StepAdminCatEmoji
 		h.mu.Lock()
-		key := stateKey{UserID: msg.From.ID}
 		h.states[key] = admin
 		h.mu.Unlock()
 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✓ Name: %s\n\n😀 **Enter emoji:**", text),
+			Text:      h.catProgressText(admin) + "\n\n😀 **Enter emoji:**",
+			ParseMode: models.ParseModeMarkdown,
 		})
 
 	case StepAdminCatEmoji:
-		// Store emoji and ask for team key
-		admin.TypeName = text // Temporarily use TypeName to store emoji
+		admin.TypeName = text
 		admin.Step = StepAdminCatTeamKey
 		h.mu.Lock()
-		key := stateKey{UserID: msg.From.ID}
 		h.states[key] = admin
 		h.mu.Unlock()
 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✓ Name: %s\n✓ Emoji: %s\n\n⌨️ **Enter Linear team key (e.g., INFRA):**", admin.CategoryName, text),
+			Text:      h.catProgressText(admin) + "\n\n⌨️ **Enter Linear team key (e.g., INFRA):**",
+			ParseMode: models.ParseModeMarkdown,
 		})
 
 	case StepAdminCatTeamKey:
-		// Store team key and ask for topic confirmation/selection
 		admin.TeamKey = text
+		h.addCategoryNow(ctx, b, msg.From.ID, admin)
+	}
+}
 
-		if admin.ThreadID != 0 {
-			// In a topic - ask for confirmation
-			admin.Step = StepCategory // Reuse for keyboard step
-			h.mu.Lock()
-			key := stateKey{UserID: msg.From.ID}
-			h.states[key] = admin
-			h.mu.Unlock()
-
-			keyboard := buildTopicConfirmKeyboard()
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:      admin.ChatID,
-				MessageID:   admin.MessageID,
-				Text:        fmt.Sprintf("✓ Name: %s\n✓ Emoji: %s\n✓ Team key: %s\n\n🗂️ **This category will be linked to the current topic. Confirm?**", admin.CategoryName, admin.TypeName, admin.TeamKey),
-				ReplyMarkup: keyboard,
-			})
-		} else {
-			// In DM - ask to select topic or make global
-			admin.Step = "admin_select_topic"
-			h.mu.Lock()
-			key := stateKey{UserID: msg.From.ID}
-			h.states[key] = admin
-			h.mu.Unlock()
-
-			// Load topics from ALL known groups (not just DM chat)
-			allTopics := h.getAllTopics()
-			rows := make([][]models.InlineKeyboardButton, 0)
-
-			// Global option first
-			rows = append(rows, []models.InlineKeyboardButton{{
-				Text:         "🌐 Make global (all topics)",
-				CallbackData: "confirm:global",
-			}})
-
-			// Topic buttons — encode chatID:threadID so we know which group
-			multiGroup := len(allTopics) > 1
-			for chatID, topics := range allTopics {
-				groupName := h.getGroupName(chatID)
-				for threadID, topicName := range topics {
-					label := topicName
-					if multiGroup {
-						label = fmt.Sprintf("%s  ·  %s", topicName, groupName)
-					}
-					rows = append(rows, []models.InlineKeyboardButton{{
-						Text:         "📌 " + label,
-						CallbackData: fmt.Sprintf("topic:%d:%d", chatID, threadID),
-					}})
-				}
-			}
-
-			// Manual entry option
-			rows = append(rows, []models.InlineKeyboardButton{{
-				Text:         "📝 Enter topic ID manually",
-				CallbackData: "topic:manual",
-			}})
-
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:      admin.ChatID,
-				MessageID:   admin.MessageID,
-				Text:        fmt.Sprintf("✓ Name: %s\n✓ Emoji: %s\n✓ Team key: %s\n\n🗂️ Link to a topic or make global:", admin.CategoryName, admin.TypeName, admin.TeamKey),
-				ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows},
-			})
+// catProgressText builds the context header shown during category creation steps
+func (h *Handler) catProgressText(admin *pendingAdminSession) string {
+	groupName := h.getGroupName(admin.TargetGroupChatID)
+	scope := "🌐 Global"
+	if admin.ThreadID != 0 {
+		topics := h.getTopics(admin.TargetGroupChatID)
+		if name, ok := topics[admin.ThreadID]; ok {
+			scope = "📌 " + name
 		}
 	}
+	lines := []string{
+		fmt.Sprintf("🏘️ %s  ·  %s", groupName, scope),
+	}
+	if admin.CategoryName != "" {
+		lines = append(lines, fmt.Sprintf("✓ Name: %s", admin.CategoryName))
+	}
+	if admin.TypeName != "" {
+		lines = append(lines, fmt.Sprintf("✓ Emoji: %s", admin.TypeName))
+	}
+	if admin.TeamKey != "" {
+		lines = append(lines, fmt.Sprintf("✓ Team key: %s", admin.TeamKey))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (h *Handler) addCategoryNow(ctx context.Context, b *tgbot.Bot, userID int64, admin *pendingAdminSession) {
@@ -619,20 +564,34 @@ func (h *Handler) handleAdminConfirmCallback(ctx context.Context, b *tgbot.Bot, 
 	confirmType := strings.TrimPrefix(query.Data, "confirm:")
 
 	if confirmType == "topic" {
-		// Link to current topic
+		// Link to current topic (legacy in-topic flow)
 		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
 			Text:            "✓ Confirmed",
 		})
 		h.addCategoryNow(ctx, b, query.From.ID, adminPending)
 	} else if confirmType == "global" {
-		// Make global (no topic)
 		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
-			Text:            "✓ Confirmed",
+			Text:            "✓ Global scope",
 		})
 		adminPending.ThreadID = 0
-		h.addCategoryNow(ctx, b, query.From.ID, adminPending)
+
+		if adminPending.Step == StepAdminCatSelectTopic {
+			// New flow: global chosen, proceed to name entry
+			adminPending.Step = StepAdminCatName
+			h.mu.Lock()
+			h.states[key] = adminPending
+			h.mu.Unlock()
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:    adminPending.ChatID,
+				MessageID: adminPending.MessageID,
+				Text:      h.catProgressText(adminPending) + "\n\n📝 **Enter category name:**",
+				ParseMode: models.ParseModeMarkdown,
+			})
+		} else {
+			h.addCategoryNow(ctx, b, query.From.ID, adminPending)
+		}
 	}
 }
 
@@ -651,65 +610,49 @@ func (h *Handler) handleAdminTopicManualCallback(ctx context.Context, b *tgbot.B
 		return
 	}
 
-	// Parse topic callback data: "topic:manual" or "topic:123" (topic ID)
+	// Parse topic callback data: "topic:{chatID}:{threadID}" — user selected a topic from the list
 	topicData := strings.TrimPrefix(query.Data, "topic:")
-
 	if topicData == "manual" {
-		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
-			CallbackQueryID: query.ID,
-			Text:            "Enter topic ID",
-		})
+		// No longer used in new flow
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		return
+	}
 
-		groups := h.getKnownGroups()
-		if len(groups) == 1 {
-			// Only one group — skip group selection, go straight to ID entry
-			for chatID := range groups {
-				adminPending.TargetGroupChatID = chatID
-			}
-			adminPending.Step = StepAdminCatManualTopicID
-			h.mu.Lock()
-			h.states[key] = adminPending
-			h.mu.Unlock()
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    adminPending.ChatID,
-				MessageID: adminPending.MessageID,
-				Text:      fmt.Sprintf("✓ Name: %s\n✓ Emoji: %s\n✓ Team key: %s\n\n🔢 Enter the forum topic ID:", adminPending.CategoryName, adminPending.TypeName, adminPending.TeamKey),
-			})
-		} else {
-			// Multiple groups — ask which group first
-			adminPending.Step = StepAdminCatManualGroup
-			h.mu.Lock()
-			h.states[key] = adminPending
-			h.mu.Unlock()
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:      adminPending.ChatID,
-				MessageID:   adminPending.MessageID,
-				Text:        "🏘️ Select the group this topic belongs to:",
-				ReplyMarkup: buildGroupKeyboard(groups),
-			})
-		}
+	// Format: "{chatID}:{threadID}" — user selected from the topic list
+	parts := strings.SplitN(topicData, ":", 2)
+	if len(parts) != 2 {
+		return
+	}
+	chatID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return
+	}
+	threadID, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return
+	}
+
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+		Text:            "✓ Topic selected",
+	})
+
+	adminPending.TargetGroupChatID = chatID
+	adminPending.ThreadID = threadID
+
+	if adminPending.Step == StepAdminCatSelectTopic {
+		// New flow: topic chosen, proceed to name entry
+		adminPending.Step = StepAdminCatName
+		h.mu.Lock()
+		h.states[key] = adminPending
+		h.mu.Unlock()
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    adminPending.ChatID,
+			MessageID: adminPending.MessageID,
+			Text:      h.catProgressText(adminPending) + "\n\n📝 **Enter category name:**",
+			ParseMode: models.ParseModeMarkdown,
+		})
 	} else {
-		// Format: "{chatID}:{threadID}" — user selected from the topic list
-		parts := strings.SplitN(topicData, ":", 2)
-		if len(parts) != 2 {
-			return
-		}
-		chatID, err := strconv.ParseInt(parts[0], 10, 64)
-		if err != nil {
-			return
-		}
-		threadID, err := strconv.Atoi(parts[1])
-		if err != nil {
-			return
-		}
-
-		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
-			CallbackQueryID: query.ID,
-			Text:            "✓ Topic selected",
-		})
-
-		adminPending.TargetGroupChatID = chatID
-		adminPending.ThreadID = threadID
 		h.addCategoryNow(ctx, b, query.From.ID, adminPending)
 	}
 }
@@ -847,18 +790,55 @@ func (h *Handler) handleAdminTopicGroupCallback(ctx context.Context, b *tgbot.Bo
 		Text:            "✓ Group selected",
 	})
 
-	// Handle addcategory manual group selection
-	if adminPending.Cmd == AdminCmdAddCategory && adminPending.Step == StepAdminCatManualGroup {
+	// Handle addcategory group selection (new flow)
+	if adminPending.Cmd == AdminCmdAddCategory && adminPending.Step == StepAdminCatSelectGroup {
 		adminPending.TargetGroupChatID = selectedChatID
-		adminPending.Step = StepAdminCatManualTopicID
-		h.mu.Lock()
-		h.states[key] = adminPending
-		h.mu.Unlock()
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:    adminPending.ChatID,
-			MessageID: adminPending.MessageID,
-			Text:      fmt.Sprintf("✓ Name: %s\n✓ Emoji: %s\n✓ Team key: %s\n\n🔢 Enter the forum topic ID:", adminPending.CategoryName, adminPending.TypeName, adminPending.TeamKey),
-		})
+		topics := h.getTopics(selectedChatID)
+
+		if len(topics) > 0 {
+			// Group has topics — ask which one
+			adminPending.Step = StepAdminCatSelectTopic
+			h.mu.Lock()
+			h.states[key] = adminPending
+			h.mu.Unlock()
+
+			rows := make([][]models.InlineKeyboardButton, 0)
+			rows = append(rows, []models.InlineKeyboardButton{{
+				Text:         "🌐 Global (all topics)",
+				CallbackData: "confirm:global",
+			}})
+			for threadID, topicName := range topics {
+				rows = append(rows, []models.InlineKeyboardButton{{
+					Text:         "📌 " + topicName,
+					CallbackData: fmt.Sprintf("topic:%d:%d", selectedChatID, threadID),
+				}})
+			}
+			rows = append(rows, []models.InlineKeyboardButton{{
+				Text:         "❌ Cancel",
+				CallbackData: "cancel",
+			}})
+
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:      adminPending.ChatID,
+				MessageID:   adminPending.MessageID,
+				Text:        fmt.Sprintf("🏘️ %s\n\n📌 Select topic:", h.getGroupName(selectedChatID)),
+				ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows},
+			})
+		} else {
+			// No topics registered — global scope, go straight to name
+			adminPending.ThreadID = 0
+			adminPending.Step = StepAdminCatName
+			h.mu.Lock()
+			h.states[key] = adminPending
+			h.mu.Unlock()
+
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:    adminPending.ChatID,
+				MessageID: adminPending.MessageID,
+				Text:      fmt.Sprintf("🏘️ %s  ·  🌐 Global\n\n📝 **Enter category name:**", h.getGroupName(selectedChatID)),
+				ParseMode: models.ParseModeMarkdown,
+			})
+		}
 		return
 	}
 

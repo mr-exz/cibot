@@ -143,6 +143,31 @@ func (d *DB) LoadTopicsForChat(ctx context.Context, chatID int64) (map[int]strin
 	return topics, rows.Err()
 }
 
+// LoadAllTopics loads all topics from every known chat from the database
+func (d *DB) LoadAllTopics(ctx context.Context) (map[int64]map[int]string, error) {
+	rows, err := d.db.QueryContext(ctx,
+		"SELECT chat_id, thread_id, topic_name FROM group_topics ORDER BY chat_id, thread_id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64]map[int]string)
+	for rows.Next() {
+		var chatID int64
+		var threadID int
+		var topicName string
+		if err := rows.Scan(&chatID, &threadID, &topicName); err != nil {
+			return nil, err
+		}
+		if result[chatID] == nil {
+			result[chatID] = make(map[int]string)
+		}
+		result[chatID][threadID] = topicName
+	}
+	return result, rows.Err()
+}
+
 // === Categories ===
 
 func (d *DB) ListCategories(ctx context.Context) ([]Category, error) {

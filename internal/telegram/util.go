@@ -224,6 +224,12 @@ func buildTopicConfirmKeyboard() *models.InlineKeyboardMarkup {
 					CallbackData: "confirm:global",
 				},
 			},
+			{
+				{
+					Text:         "❌ Cancel",
+					CallbackData: "cancel",
+				},
+			},
 		},
 	}
 }
