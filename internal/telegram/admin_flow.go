@@ -149,6 +149,74 @@ func (h *Handler) addCategoryNow(ctx context.Context, b *tgbot.Bot, userID int64
 
 // ===== /addtype flow =====
 
+// handleAdminTypeSelectCallback handles tapping an existing type or "New type" in the type picker.
+func (h *Handler) handleAdminTypeSelectCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+	key := stateKey{UserID: query.From.ID}
+	h.mu.Lock()
+	admin, ok := h.states[key].(*pendingAdminSession)
+	h.mu.Unlock()
+	if !ok || admin == nil || admin.Step != StepAdminTypeSelect {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		return
+	}
+
+	val := strings.TrimPrefix(query.Data, "type_sel:")
+
+	if val == "new" {
+		// Transition to free-text name input
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		h.mu.Lock()
+		admin.Step = StepAdminTypeName
+		h.mu.Unlock()
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    admin.ChatID,
+			MessageID: admin.MessageID,
+			Text:      fmt.Sprintf("✓ Category: %s\n\n📝 Enter new request type name:", admin.CategoryName),
+		})
+		return
+	}
+
+	// Existing type selected — link directly
+	typeID, err := strconv.ParseInt(val, 10, 64)
+	if err != nil {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		return
+	}
+
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID, Text: "Linking..."})
+
+	if err := h.storage.LinkRequestTypeToCategory(ctx, admin.CategoryID, typeID); err != nil {
+		log.Printf("❌ Failed to link type to category: %v", err)
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    admin.ChatID,
+			MessageID: admin.MessageID,
+			Text:      fmt.Sprintf("❌ Failed to link type: %v", err),
+		})
+		return
+	}
+
+	h.mu.Lock()
+	delete(h.states, key)
+	h.mu.Unlock()
+
+	// Resolve type name for display
+	typeName := val
+	if rt, err := h.storage.GetRequestType(ctx, typeID); err == nil {
+		typeName = rt.Name
+	}
+
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:    admin.ChatID,
+		MessageID: admin.MessageID,
+		Text:      fmt.Sprintf("✅ Linked type to category!\n\n%s → %s", admin.CategoryName, typeName),
+	})
+	log.Printf("✓ Admin linked existing type %d (%s) to category %d", typeID, typeName, admin.CategoryID)
+}
+
 func (h *Handler) handleAdminAddTypePending(ctx context.Context, b *tgbot.Bot, msg *models.Message, admin *pendingAdminSession) {
 	text := strings.TrimSpace(msg.Text)
 	if text == "" {
@@ -491,17 +559,23 @@ func (h *Handler) handleAdminCategoryCallback(ctx context.Context, b *tgbot.Bot,
 
 	switch admin.Cmd {
 	case AdminCmdAddType:
-		// Transition to asking for type name
-		admin.Step = StepAdminTypeName
+		admin.Step = StepAdminTypeSelect
 		h.mu.Lock()
 		key := stateKey{UserID: admin.UserID}
 		h.states[key] = admin
 		h.mu.Unlock()
 
+		allTypes, err := h.storage.ListAllRequestTypes(ctx)
+		if err != nil {
+			log.Printf("❌ Failed to list request types: %v", err)
+			allTypes = nil
+		}
+		keyboard := buildTypeSelectKeyboard(allTypes)
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:    admin.ChatID,
-			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✓ Category: %s %s\n\n📝 **Enter request type name:**", cat.Emoji, cat.Name),
+			ChatID:      admin.ChatID,
+			MessageID:   admin.MessageID,
+			Text:        fmt.Sprintf("✓ Category: %s %s\n\n📋 Select existing type or create new:", cat.Emoji, cat.Name),
+			ReplyMarkup: keyboard,
 		})
 
 	case AdminCmdAddPerson:

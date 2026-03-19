@@ -194,6 +194,22 @@ func isAdmin(cfg *config.Config, username string) bool {
 	return cfg.IsAdmin(username)
 }
 
+// buildTypeSelectKeyboard creates a keyboard with existing types + a "New type" option
+func buildTypeSelectKeyboard(types []storage.RequestType) *models.InlineKeyboardMarkup {
+	rows := make([][]models.InlineKeyboardButton, 0, len(types)+2)
+	for _, t := range types {
+		rows = append(rows, []models.InlineKeyboardButton{{
+			Text:         t.Name,
+			CallbackData: fmt.Sprintf("type_sel:%d", t.ID),
+		}})
+	}
+	rows = append(rows,
+		[]models.InlineKeyboardButton{{Text: "✏️ New type", CallbackData: "type_sel:new"}},
+		[]models.InlineKeyboardButton{{Text: "❌ Cancel", CallbackData: "cancel"}},
+	)
+	return &models.InlineKeyboardMarkup{InlineKeyboard: rows}
+}
+
 // buildPersonKeyboard creates a keyboard from support person list
 func buildPersonKeyboard(persons []storage.SupportPerson) *models.InlineKeyboardMarkup {
 	items := make([]ButtonItem, len(persons))

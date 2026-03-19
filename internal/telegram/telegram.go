@@ -78,6 +78,7 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "confirm:", tgbot.MatchTypePrefix, h.handleAdminConfirmCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "topic:", tgbot.MatchTypePrefix, h.handleAdminTopicManualCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "catmgr:", tgbot.MatchTypePrefix, h.handleCategoryManagerCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "type_sel:", tgbot.MatchTypePrefix, h.handleAdminTypeSelectCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "acat_grp:", tgbot.MatchTypePrefix, h.handleAdminCatGrpNav)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "acat_topic:", tgbot.MatchTypePrefix, h.handleAdminCatTopicNav)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "acat_back", tgbot.MatchTypeExact, h.handleAdminCatBack)
@@ -155,10 +156,18 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 			return
 		}
 	} else {
-		// Group/supergroup: auto-register and check approval
+		// Group/supergroup: register in DB only when title is new or changed
 		if msg.Chat.Title != "" {
-			if err := h.storage.RegisterGroup(ctx, msg.Chat.ID, msg.Chat.Title); err != nil {
-				log.Printf("⚠️  Failed to register group %d: %v", msg.Chat.ID, err)
+			h.mu.Lock()
+			changed := h.groups[msg.Chat.ID] != msg.Chat.Title
+			if changed {
+				h.groups[msg.Chat.ID] = msg.Chat.Title
+			}
+			h.mu.Unlock()
+			if changed {
+				if err := h.storage.RegisterGroup(ctx, msg.Chat.ID, msg.Chat.Title); err != nil {
+					log.Printf("⚠️  Failed to register group %d: %v", msg.Chat.ID, err)
+				}
 			}
 		}
 		approved, err := h.storage.IsGroupApproved(ctx, msg.Chat.ID)
@@ -186,13 +195,6 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 				}
 			}()
 		}
-	}
-
-	// Cache group name in memory
-	if msg.Chat.Title != "" {
-		h.mu.Lock()
-		h.groups[msg.Chat.ID] = msg.Chat.Title
-		h.mu.Unlock()
 	}
 
 	key := stateKey{
@@ -320,9 +322,25 @@ func (h *Handler) recordTopic(chatID int64, threadID int, topicName string) {
 // getGroupName returns the cached title for a group, or a fallback string
 func (h *Handler) getGroupName(chatID int64) string {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if name, ok := h.groups[chatID]; ok {
+		h.mu.Unlock()
 		return name
+	}
+	h.mu.Unlock()
+
+	// Fall back to DB
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	groups, err := h.storage.ListGroups(ctx)
+	if err == nil {
+		for _, g := range groups {
+			if g.ChatID == chatID {
+				h.mu.Lock()
+				h.groups[chatID] = g.Title
+				h.mu.Unlock()
+				return g.Title
+			}
+		}
 	}
 	return fmt.Sprintf("Group %d", chatID)
 }

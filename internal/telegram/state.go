@@ -41,7 +41,8 @@ const (
 	StepAdminCatTeamKey = "admin_cat_teamkey"
 
 	// addtype steps
-	StepAdminTypeName = "admin_type_name"
+	StepAdminTypeSelect = "admin_type_select"
+	StepAdminTypeName   = "admin_type_name"
 
 	// addperson steps
 	StepAdminPersonName     = "admin_person_name"

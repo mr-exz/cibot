@@ -264,6 +264,24 @@ func (d *DB) DeleteCategory(ctx context.Context, categoryID int64) error {
 
 // === Request Types ===
 
+func (d *DB) ListAllRequestTypes(ctx context.Context) ([]RequestType, error) {
+	rows, err := d.db.QueryContext(ctx, "SELECT id, name FROM request_types ORDER BY name")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var types []RequestType
+	for rows.Next() {
+		var rt RequestType
+		if err := rows.Scan(&rt.ID, &rt.Name); err != nil {
+			return nil, err
+		}
+		types = append(types, rt)
+	}
+	return types, rows.Err()
+}
+
 func (d *DB) ListRequestTypesForCategory(ctx context.Context, categoryID int64) ([]RequestType, error) {
 	rows, err := d.db.QueryContext(ctx,
 		"SELECT rt.id, rt.name FROM request_types rt "+

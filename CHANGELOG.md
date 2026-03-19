@@ -2,7 +2,10 @@
 
 ## [0.0.30]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/addtype` — after selecting a category, existing request types are now shown as buttons; tap one to link it directly, or tap ✏️ New type to enter a custom name; eliminates duplicate creation and makes reuse of shared types explicit
+- Group names are now loaded from DB on cache miss in `getGroupName` so pickers show correct names immediately after bot restart instead of raw IDs
+- Group title is only written to DB when it changes (was written on every message); same change-detection pattern as user metadata
 
 
 ## [0.0.29]
