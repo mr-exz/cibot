@@ -563,35 +563,24 @@ func (h *Handler) handleAdminConfirmCallback(ctx context.Context, b *tgbot.Bot, 
 	// Parse confirm type
 	confirmType := strings.TrimPrefix(query.Data, "confirm:")
 
-	if confirmType == "topic" {
-		// Link to current topic (legacy in-topic flow)
-		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
-			CallbackQueryID: query.ID,
-			Text:            "✓ Confirmed",
-		})
-		h.addCategoryNow(ctx, b, query.From.ID, adminPending)
-	} else if confirmType == "global" {
+	if confirmType == "global" && adminPending.Step == StepAdminCatSelectTopic {
 		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
 			Text:            "✓ Global scope",
 		})
 		adminPending.ThreadID = 0
-
-		if adminPending.Step == StepAdminCatSelectTopic {
-			// New flow: global chosen, proceed to name entry
-			adminPending.Step = StepAdminCatName
-			h.mu.Lock()
-			h.states[key] = adminPending
-			h.mu.Unlock()
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    adminPending.ChatID,
-				MessageID: adminPending.MessageID,
-				Text:      h.catProgressText(adminPending) + "\n\n📝 **Enter category name:**",
-				ParseMode: models.ParseModeMarkdown,
-			})
-		} else {
-			h.addCategoryNow(ctx, b, query.From.ID, adminPending)
-		}
+		adminPending.Step = StepAdminCatName
+		h.mu.Lock()
+		h.states[key] = adminPending
+		h.mu.Unlock()
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    adminPending.ChatID,
+			MessageID: adminPending.MessageID,
+			Text:      h.catProgressText(adminPending) + "\n\n📝 **Enter category name:**",
+			ParseMode: models.ParseModeMarkdown,
+		})
+	} else {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
 	}
 }
 
@@ -640,21 +629,20 @@ func (h *Handler) handleAdminTopicManualCallback(ctx context.Context, b *tgbot.B
 	adminPending.TargetGroupChatID = chatID
 	adminPending.ThreadID = threadID
 
-	if adminPending.Step == StepAdminCatSelectTopic {
-		// New flow: topic chosen, proceed to name entry
-		adminPending.Step = StepAdminCatName
-		h.mu.Lock()
-		h.states[key] = adminPending
-		h.mu.Unlock()
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:    adminPending.ChatID,
-			MessageID: adminPending.MessageID,
-			Text:      h.catProgressText(adminPending) + "\n\n📝 **Enter category name:**",
-			ParseMode: models.ParseModeMarkdown,
-		})
-	} else {
-		h.addCategoryNow(ctx, b, query.From.ID, adminPending)
+	if adminPending.Step != StepAdminCatSelectTopic {
+		return
 	}
+	// New flow: topic chosen, proceed to name entry
+	adminPending.Step = StepAdminCatName
+	h.mu.Lock()
+	h.states[key] = adminPending
+	h.mu.Unlock()
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:    adminPending.ChatID,
+		MessageID: adminPending.MessageID,
+		Text:      h.catProgressText(adminPending) + "\n\n📝 **Enter category name:**",
+		ParseMode: models.ParseModeMarkdown,
+	})
 }
 
 func (h *Handler) handleAdminRotationCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {

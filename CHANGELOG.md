@@ -2,7 +2,8 @@
 
 ## [0.0.25]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- `/addcategory` — stale Telegram callbacks (`confirm:global`, `topic:`) arriving after bot restart triggered `addCategoryNow` immediately with empty fields; handlers now only act when session is in the expected `StepAdminCatSelectTopic` step, ignoring out-of-sequence callbacks
 
 
 ## [0.0.24]
