@@ -2,7 +2,8 @@
 
 ## [0.0.33]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Reverted
+- `/support` ForceReply approach from 0.0.32 — reverted back to single-message `EditMessageText` flow; the ForceReply UX was disruptive in group chats
 
 
 ## [0.0.32]
