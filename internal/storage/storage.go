@@ -296,20 +296,15 @@ func (d *DB) GetRequestType(ctx context.Context, typeID int64) (*RequestType, er
 }
 
 func (d *DB) AddRequestType(ctx context.Context, name string) (int64, error) {
-	// Try to insert, but if it exists, just return the existing ID
-	result, err := d.db.ExecContext(ctx,
+	// Insert if not exists; ignore duplicate name
+	_, err := d.db.ExecContext(ctx,
 		"INSERT OR IGNORE INTO request_types (name) VALUES (?)", name)
 	if err != nil {
 		return 0, err
 	}
 
-	// If we inserted a new one, return the ID
-	lastID, err := result.LastInsertId()
-	if err == nil && lastID > 0 {
-		return lastID, nil
-	}
-
-	// Otherwise fetch the existing one
+	// Always SELECT — LastInsertId is unreliable after INSERT OR IGNORE
+	// (go-sqlite3 returns the last connection rowid, not the ignored row)
 	var id int64
 	err = d.db.QueryRowContext(ctx,
 		"SELECT id FROM request_types WHERE name = ?", name).Scan(&id)

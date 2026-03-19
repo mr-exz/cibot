@@ -2,7 +2,8 @@
 
 ## [0.0.29]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- `/addtype` — `AddRequestType` returned a stale connection rowid when the type name already existed (SQLite's `LastInsertId()` after `INSERT OR IGNORE` returns the last rowid of any previous insert on the connection, not zero); always SELECT the id now, so linking an existing type name to a new category works correctly instead of failing with a FOREIGN KEY constraint error
 
 
 ## [0.0.28]
