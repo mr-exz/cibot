@@ -2,7 +2,9 @@
 
 ## [0.0.32]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- `/support` title and description steps now use `ForceReply` messages instead of `EditMessageText`; plain text replies from users in groups were never delivered to the bot when group privacy mode is enabled — only replies to bot messages are guaranteed to arrive regardless of privacy mode
+- Group-level categories (scoped to a group but not a specific topic) were never returned by `ListCategoriesForContext`; the query now includes `chat_id = ? AND thread_id IS NULL` in both the no-topic and topic branches so group-level categories appear in `/support` for all users in that group
 
 
 ## [0.0.31]

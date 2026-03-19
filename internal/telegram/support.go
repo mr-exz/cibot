@@ -244,11 +244,29 @@ func (h *Handler) handlePriorityCallback(ctx context.Context, b *tgbot.Bot, upda
 		h.mu.Lock()
 		pending.Step = StepTitle
 		h.mu.Unlock()
+
+		// Collapse the priority keyboard — removes inline buttons from the selection message
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    pending.ChatID,
 			MessageID: pending.MessageID,
-			Text:      "✓ " + priorityLabel(priority) + "\n\n📝 Enter issue title:",
+			Text:      "✓ " + priorityLabel(priority),
 		})
+
+		// Send a separate ForceReply message so the title text reaches the bot even
+		// when group privacy mode is on (only replies to bot messages are delivered).
+		sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
+			ChatID:          pending.ChatID,
+			MessageThreadID: pending.ThreadID,
+			Text:            "📝 Enter issue title:",
+			ReplyMarkup:     &models.ForceReply{ForceReply: true},
+		})
+		if err != nil {
+			log.Printf("⚠️  StepTitle SendMessage failed (chat=%d): %v", pending.ChatID, err)
+			return
+		}
+		h.mu.Lock()
+		pending.MessageID = sentMsg.ID
+		h.mu.Unlock()
 	}
 }
 
@@ -260,28 +278,45 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 	switch pending.Step {
 	case StepTitle:
 		if text == "" {
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    pending.ChatID,
-				MessageID: pending.MessageID,
-				Text:      "❌ Title cannot be empty",
+			sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
+				ChatID:          pending.ChatID,
+				MessageThreadID: pending.ThreadID,
+				Text:            "❌ Title cannot be empty. Enter issue title:",
+				ReplyMarkup:     &models.ForceReply{ForceReply: true},
 			})
+			if err == nil {
+				h.mu.Lock()
+				pending.MessageID = sentMsg.ID
+				h.mu.Unlock()
+			}
 			return
 		}
 
-		// DON'T delete user's message - preserve title for reference
-		// Store title and move to description step
 		h.mu.Lock()
 		pending.Title = text
 		pending.Step = StepDescription
 		h.mu.Unlock()
 
-		// Edit bot's message to ask for description
-		if _, err := b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		// Collapse the title prompt to a summary
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    pending.ChatID,
 			MessageID: pending.MessageID,
-			Text:      fmt.Sprintf("✓ Title: %s\n\nEnter description (optional, or send media):", text),
-		}); err != nil {
-			log.Printf("⚠️  StepTitle EditMessageText failed (chat=%d msg=%d): %v", pending.ChatID, pending.MessageID, err)
+			Text:      fmt.Sprintf("✓ Title: %s", text),
+		})
+
+		// Send a separate ForceReply for description so it reaches the bot with privacy mode on
+		sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
+			ChatID:          pending.ChatID,
+			MessageThreadID: pending.ThreadID,
+			Text:            "📝 Enter description (optional, or send media):",
+			ReplyMarkup:     &models.ForceReply{ForceReply: true},
+		})
+		if err != nil {
+			log.Printf("⚠️  StepDescription SendMessage failed (chat=%d): %v", pending.ChatID, err)
+		} else {
+			h.mu.Lock()
+			pending.MessageID = sentMsg.ID
+			h.mu.Unlock()
 		}
 
 	case StepDescription:

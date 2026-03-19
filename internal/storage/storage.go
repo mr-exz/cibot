@@ -196,16 +196,22 @@ func (d *DB) ListCategoriesForContext(ctx context.Context, chatID int64, threadI
 	var args []interface{}
 
 	if threadID == 0 {
-		// Main group: only global categories
-		query = "SELECT id, name, emoji, linear_team_key, chat_id, thread_id FROM categories WHERE chat_id IS NULL AND thread_id IS NULL ORDER BY id"
-	} else {
-		// Forum topic: global + this topic's categories
+		// Main group (no topic): global + group-level categories for this chat
 		query = `SELECT id, name, emoji, linear_team_key, chat_id, thread_id
 				 FROM categories
 				 WHERE (chat_id IS NULL AND thread_id IS NULL)
+				    OR (chat_id = ? AND thread_id IS NULL)
+				 ORDER BY id`
+		args = []interface{}{chatID}
+	} else {
+		// Forum topic: global + group-level + this topic's categories
+		query = `SELECT id, name, emoji, linear_team_key, chat_id, thread_id
+				 FROM categories
+				 WHERE (chat_id IS NULL AND thread_id IS NULL)
+				    OR (chat_id = ? AND thread_id IS NULL)
 				    OR (chat_id = ? AND thread_id = ?)
 				 ORDER BY id`
-		args = []interface{}{chatID, threadID}
+		args = []interface{}{chatID, chatID, threadID}
 	}
 
 	rows, err := d.db.QueryContext(ctx, query, args...)
