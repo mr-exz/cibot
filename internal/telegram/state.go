@@ -15,13 +15,14 @@ const (
 type AdminCmd string
 
 const (
-	AdminCmdAddCategory  AdminCmd = "addcategory"
-	AdminCmdAddType      AdminCmd = "addtype"
-	AdminCmdAddPerson    AdminCmd = "addperson"
-	AdminCmdSetRotation  AdminCmd = "setrotation"
-	AdminCmdSetWorkHours AdminCmd = "setworkhours"
-	AdminCmdAddTopic     AdminCmd = "addtopic"
-	AdminCmdSetLabel     AdminCmd = "setlabel"
+	AdminCmdAddCategory    AdminCmd = "addcategory"
+	AdminCmdAddType        AdminCmd = "addtype"
+	AdminCmdAddPerson      AdminCmd = "addperson"
+	AdminCmdSetRotation    AdminCmd = "setrotation"
+	AdminCmdSetWorkHours   AdminCmd = "setworkhours"
+	AdminCmdAddTopic       AdminCmd = "addtopic"
+	AdminCmdSetLabel       AdminCmd = "setlabel"
+	AdminCmdCloneCategory  AdminCmd = "clonecategory"
 )
 
 // Step constants for the multi-step issue creation flow
@@ -73,6 +74,9 @@ const (
 	// setlabel steps (DM flow: forward a user message → type label → pick group)
 	StepAdminSetLabelWaitLabel = "admin_setlabel_wait_label"
 	StepAdminSetLabelGroup     = "admin_setlabel_group"
+
+	// clonecategory steps
+	StepAdminCloneKeyInput = "admin_clone_key_input"
 )
 
 // pendingSession represents an in-progress issue creation session for a user

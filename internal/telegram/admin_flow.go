@@ -30,6 +30,8 @@ func (h *Handler) handleAdminPendingInput(ctx context.Context, b *tgbot.Bot, msg
 		h.handleAdminAddTopicPending(ctx, b, msg, admin)
 	case AdminCmdSetLabel:
 		h.handleAdminSetLabelPending(ctx, b, msg, admin)
+	case AdminCmdCloneCategory:
+		h.handleAdminCloneCategoryPending(ctx, b, msg, admin)
 	}
 }
 
@@ -141,7 +143,7 @@ func (h *Handler) addCategoryNow(ctx context.Context, b *tgbot.Bot, userID int64
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    admin.ChatID,
 		MessageID: admin.MessageID,
-		Text:      fmt.Sprintf("✅ **Category added%s!**\n\n%s %s → %s\n\n**ID:** %d\n📝 Use this ID for `/addtype` and `/addperson`", scopeMsg, admin.TypeName, admin.CategoryName, admin.TeamKey, catID),
+		Text:      fmt.Sprintf("✅ Category added%s!\n\n%s %s → %s\n\nID: %d", scopeMsg, admin.TypeName, admin.CategoryName, admin.TeamKey, catID),
 	})
 
 	log.Printf("✓ Admin added category: %s (ID: %d)", admin.CategoryName, catID)
@@ -258,7 +260,7 @@ func (h *Handler) handleAdminAddTypePending(ctx context.Context, b *tgbot.Bot, m
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✅ **Request type added!**\n\n%s → %s", admin.CategoryName, text),
+			Text:      fmt.Sprintf("✅ Request type added!\n\n%s → %s", admin.CategoryName, text),
 		})
 
 		log.Printf("✓ Admin added type %s to category %d", admin.TypeName, admin.CategoryID)
@@ -285,7 +287,7 @@ func (h *Handler) handleAdminAddPersonPending(ctx context.Context, b *tgbot.Bot,
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✓ Name: %s\n\n📱 **Enter Telegram username (@...):**", admin.PersonName),
+			Text:      fmt.Sprintf("✓ Name: %s\n\n📱 Enter Telegram username (@...):", admin.PersonName),
 		})
 
 	case StepAdminPersonTelegram:
@@ -299,7 +301,7 @@ func (h *Handler) handleAdminAddPersonPending(ctx context.Context, b *tgbot.Bot,
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✓ Name: %s\n✓ Telegram: @%s\n\n🔷 **Enter Linear username (@...):**", admin.PersonName, admin.TgUsername),
+			Text:      fmt.Sprintf("✓ Name: %s\n✓ Telegram: @%s\n\n🔷 Enter Linear username (@...):", admin.PersonName, admin.TgUsername),
 		})
 
 	case StepAdminPersonLinear:
@@ -314,7 +316,7 @@ func (h *Handler) handleAdminAddPersonPending(ctx context.Context, b *tgbot.Bot,
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:      admin.ChatID,
 			MessageID:   admin.MessageID,
-			Text:        fmt.Sprintf("✓ Name: %s\n✓ Telegram: @%s\n✓ Linear: @%s\n\n🌍 **Enter timezone (e.g., +02:00) or skip:**", admin.PersonName, admin.TgUsername, admin.LinearUsername),
+			Text:        fmt.Sprintf("✓ Name: %s\n✓ Telegram: @%s\n✓ Linear: @%s\n\n🌍 Enter timezone (e.g., +02:00) or skip:", admin.PersonName, admin.TgUsername, admin.LinearUsername),
 			ReplyMarkup: keyboard,
 		})
 
@@ -336,7 +338,7 @@ func (h *Handler) handleAdminAddPersonPending(ctx context.Context, b *tgbot.Bot,
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:      admin.ChatID,
 			MessageID:   admin.MessageID,
-			Text:        fmt.Sprintf("✓ Timezone: %s\n\n⏰ **Enter work hours (e.g., 08:30-18:30) or skip:**", tzDisplay),
+			Text:        fmt.Sprintf("✓ Timezone: %s\n\n⏰ Enter work hours (e.g., 08:30-18:30) or skip:", tzDisplay),
 			ReplyMarkup: keyboard,
 		})
 
@@ -358,7 +360,7 @@ func (h *Handler) handleAdminAddPersonPending(ctx context.Context, b *tgbot.Bot,
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:      admin.ChatID,
 			MessageID:   admin.MessageID,
-			Text:        fmt.Sprintf("✓ Work hours: %s\n\n📅 **Enter work days (e.g., 1-5) or skip:**", hoursDisplay),
+			Text:        fmt.Sprintf("✓ Work hours: %s\n\n📅 Enter work days (e.g., 1-5) or skip:", hoursDisplay),
 			ReplyMarkup: keyboard,
 		})
 
@@ -441,7 +443,7 @@ func (h *Handler) handleAdminAddPersonPending(ctx context.Context, b *tgbot.Bot,
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✅ **Support person added!**\n\n👤 %s\n🔵 @%s | 🔷 @%s\n⏰ %s\n📅 %s", admin.PersonName, admin.TgUsername, admin.LinearUsername, admin.WorkHours, daysDisplay),
+			Text:      fmt.Sprintf("✅ Support person added!\n\n👤 %s\n🔵 @%s | 🔷 @%s\n⏰ %s\n📅 %s", admin.PersonName, admin.TgUsername, admin.LinearUsername, admin.WorkHours, daysDisplay),
 		})
 
 		log.Printf("✓ Admin added support person %s", admin.PersonName)
@@ -474,7 +476,7 @@ func (h *Handler) handleAdminSetWorkHoursPending(ctx context.Context, b *tgbot.B
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✓ Timezone: %s\n\n⏰ **Enter work hours (e.g., 08:30-18:30):**", admin.Timezone),
+			Text:      fmt.Sprintf("✓ Timezone: %s\n\n⏰ Enter work hours (e.g., 08:30-18:30):", admin.Timezone),
 		})
 
 	case StepAdminWhHours:
@@ -488,7 +490,7 @@ func (h *Handler) handleAdminSetWorkHoursPending(ctx context.Context, b *tgbot.B
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✓ Work hours: %s\n\n📅 **Enter work days (e.g., 1-5 or 12345):**", admin.WorkHours),
+			Text:      fmt.Sprintf("✓ Work hours: %s\n\n📅 Enter work days (e.g., 1-5 or 12345):", admin.WorkHours),
 		})
 
 	case StepAdminWhDays:
@@ -543,7 +545,7 @@ func (h *Handler) handleAdminSetWorkHoursPending(ctx context.Context, b *tgbot.B
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✅ **Work hours updated!**\n\n🌍 Timezone: %s\n⏰ Hours: %s\n📅 Days: %s", admin.Timezone, admin.WorkHours, admin.WorkDays),
+			Text:      fmt.Sprintf("✅ Work hours updated!\n\n🌍 Timezone: %s\n⏰ Hours: %s\n📅 Days: %s", admin.Timezone, admin.WorkHours, admin.WorkDays),
 		})
 
 		log.Printf("✓ Admin updated work hours for @%s", admin.TgUsername)
@@ -589,7 +591,7 @@ func (h *Handler) handleAdminCategoryCallback(ctx context.Context, b *tgbot.Bot,
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✓ Category: %s %s\n\n👤 **Enter support person name:**", cat.Emoji, cat.Name),
+			Text:      fmt.Sprintf("✓ Category: %s %s\n\n👤 Enter support person name:", cat.Emoji, cat.Name),
 		})
 
 	case AdminCmdSetRotation:
@@ -604,7 +606,7 @@ func (h *Handler) handleAdminCategoryCallback(ctx context.Context, b *tgbot.Bot,
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:      admin.ChatID,
 			MessageID:   admin.MessageID,
-			Text:        fmt.Sprintf("✓ Category: %s %s\n\n📅 **Select rotation type:**", cat.Emoji, cat.Name),
+			Text:        fmt.Sprintf("✓ Category: %s %s\n\n📅 Select rotation type:", cat.Emoji, cat.Name),
 			ReplyMarkup: keyboard,
 		})
 	}
@@ -1008,7 +1010,7 @@ func (h *Handler) handleAdminRotationCallback(ctx context.Context, b *tgbot.Bot,
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    adminPending.ChatID,
 		MessageID: adminPending.MessageID,
-		Text:      fmt.Sprintf("✅ **Rotation updated!**\n\n%s %s → %s", rotationName, rotationType, adminPending.CategoryName),
+		Text:      fmt.Sprintf("✅ Rotation updated!\n\n%s %s → %s", rotationName, rotationType, adminPending.CategoryName),
 	})
 
 	log.Printf("✓ Admin set rotation for category %d to %s", adminPending.CategoryID, rotationType)
@@ -1062,7 +1064,7 @@ func (h *Handler) handleAdminPersonCallback(ctx context.Context, b *tgbot.Bot, u
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      adminPending.ChatID,
 		MessageID:   adminPending.MessageID,
-		Text:        fmt.Sprintf("✓ Person selected\n\n🌍 **Enter timezone (e.g., +02:00):**"),
+		Text:        "✓ Person selected\n\n🌍 Enter timezone (e.g., +02:00):",
 		ReplyMarkup: keyboard,
 	})
 }
@@ -1323,4 +1325,20 @@ func (h *Handler) handleAdminSetLabelPending(ctx context.Context, b *tgbot.Bot, 
 	} else {
 		log.Printf("✓ setlabel group keyboard shown for label=%q user=%d", label, admin.LabelUserID)
 	}
+}
+
+// ===== /clonecategory (key-change path) =====
+
+func (h *Handler) handleAdminCloneCategoryPending(ctx context.Context, b *tgbot.Bot, msg *models.Message, admin *pendingAdminSession) {
+	if admin.Step != StepAdminCatTeamKey {
+		return
+	}
+	newKey := strings.TrimSpace(msg.Text)
+	if newKey == "" {
+		return
+	}
+
+	// execClone needs chatID/threadID of target and the new key
+	// TargetGroupChatID = target group, ThreadID = target thread (0 = group-level)
+	h.execClone(ctx, b, admin.ChatID, admin.MessageID, msg.From.ID, admin.CategoryID, admin.TargetGroupChatID, admin.ThreadID, newKey)
 }

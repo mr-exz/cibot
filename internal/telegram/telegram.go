@@ -138,6 +138,9 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 	}
 
 	msg := update.Message
+	if msg.From == nil {
+		return // service messages (anonymous admin posts, channel posts) — skip
+	}
 	threadInfo := ""
 	if msg.MessageThreadID != 0 {
 		threadInfo = fmt.Sprintf(" [TOPIC #%d]", msg.MessageThreadID)

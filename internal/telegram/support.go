@@ -33,7 +33,7 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 
 	params := &tgbot.SendMessageParams{
 		ChatID:      msg.Chat.ID,
-		Text:        "🗂️ **Select issue category:**",
+		Text:        "🗂️ Select issue category:",
 		ReplyMarkup: keyboard,
 	}
 	if msg.MessageThreadID != 0 {
@@ -276,11 +276,13 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 		h.mu.Unlock()
 
 		// Edit bot's message to ask for description
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		if _, err := b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    pending.ChatID,
 			MessageID: pending.MessageID,
-			Text:      fmt.Sprintf("✓ Title: %s\n\n📄 **Enter description (optional) and attach media if needed:**", text),
-		})
+			Text:      fmt.Sprintf("✓ Title: %s\n\nEnter description (optional, or send media):", text),
+		}); err != nil {
+			log.Printf("⚠️  StepTitle EditMessageText failed (chat=%d msg=%d): %v", pending.ChatID, pending.MessageID, err)
+		}
 
 	case StepDescription:
 		// DON'T delete user's message - preserve data
@@ -377,11 +379,11 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 		}
 
 		finalText := fmt.Sprintf(
-			"✅ **Issue created!**\n\n"+
-				"📝 **Title:** %s\n"+
-				"📄 **Description:** %s\n"+
-				"👤 **Assigned to:** %s\n"+
-				"🔗 **Link:** %s",
+			"✅ Issue created!\n\n"+
+				"📝 Title: %s\n"+
+				"📄 Description: %s\n"+
+				"👤 Assigned to: %s\n"+
+				"🔗 Link: %s",
 			title,
 			truncateStr(text, 50),
 			assigneeStr,

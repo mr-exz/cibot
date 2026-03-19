@@ -62,6 +62,7 @@ func (h *Handler) sendCategoryDetail(ctx context.Context, b *tgbot.Bot, chatID i
 		{{Text: "🌐 Make Global", CallbackData: fmt.Sprintf("catmgr:global:%d", cat.ID)}},
 		{{Text: "🏘 Group-level", CallbackData: fmt.Sprintf("catmgr:group:%d", cat.ID)}},
 		{{Text: "📌 Topic-level", CallbackData: fmt.Sprintf("catmgr:topic:%d", cat.ID)}},
+		{{Text: "📋 Clone", CallbackData: fmt.Sprintf("catmgr:clone:%d", cat.ID)}},
 		{{Text: "🗑 Delete", CallbackData: fmt.Sprintf("catmgr:delete:%d", cat.ID)}},
 		{{Text: "⬅ Back", CallbackData: "catmgr:list"}},
 	}
@@ -266,6 +267,110 @@ func (h *Handler) handleCategoryManagerCallback(ctx context.Context, b *tgbot.Bo
 		h.sendCategoryList(ctx, b, msg.Chat.ID, msg.ID)
 		return
 	}
+
+	// catmgr:clone:{catID} — pick target group
+	if strings.HasPrefix(action, "clone:") {
+		catID, err := strconv.ParseInt(strings.TrimPrefix(action, "clone:"), 10, 64)
+		if err != nil {
+			return
+		}
+		h.showGroupPickerForCatMgr(ctx, b, msg.Chat.ID, msg.ID, catID, "clonegrp")
+		return
+	}
+
+	// catmgr:clonegrp:{catID}:{chatID} — group chosen, show topic picker or key step
+	if strings.HasPrefix(action, "clonegrp:") {
+		parts := strings.SplitN(strings.TrimPrefix(action, "clonegrp:"), ":", 2)
+		if len(parts) != 2 {
+			return
+		}
+		catID, err1 := strconv.ParseInt(parts[0], 10, 64)
+		targetChatID, err2 := strconv.ParseInt(parts[1], 10, 64)
+		if err1 != nil || err2 != nil {
+			return
+		}
+		h.showCloneTopicPicker(ctx, b, msg.Chat.ID, msg.ID, catID, targetChatID)
+		return
+	}
+
+	// catmgr:clonetopic:{catID}:{chatID}:{threadID} — scope chosen, show key step
+	if strings.HasPrefix(action, "clonetopic:") {
+		parts := strings.SplitN(strings.TrimPrefix(action, "clonetopic:"), ":", 3)
+		if len(parts) != 3 {
+			return
+		}
+		catID, err1 := strconv.ParseInt(parts[0], 10, 64)
+		targetChatID, err2 := strconv.ParseInt(parts[1], 10, 64)
+		threadID, err3 := strconv.Atoi(parts[2])
+		if err1 != nil || err2 != nil || err3 != nil {
+			return
+		}
+		h.showCloneKeyStep(ctx, b, msg.Chat.ID, msg.ID, query.From.ID, catID, targetChatID, threadID)
+		return
+	}
+
+	// catmgr:clonesame:{catID}:{chatID}:{threadID} — clone with same Linear key
+	if strings.HasPrefix(action, "clonesame:") {
+		parts := strings.SplitN(strings.TrimPrefix(action, "clonesame:"), ":", 3)
+		if len(parts) != 3 {
+			return
+		}
+		catID, err1 := strconv.ParseInt(parts[0], 10, 64)
+		targetChatID, err2 := strconv.ParseInt(parts[1], 10, 64)
+		threadID, err3 := strconv.Atoi(parts[2])
+		if err1 != nil || err2 != nil || err3 != nil {
+			return
+		}
+		src, err := h.storage.GetCategory(ctx, catID)
+		if err != nil {
+			return
+		}
+		h.execClone(ctx, b, msg.Chat.ID, msg.ID, query.From.ID, catID, targetChatID, threadID, src.LinearTeamKey)
+		return
+	}
+
+	// catmgr:clonekey:{catID}:{chatID}:{threadID} — change key before cloning
+	if strings.HasPrefix(action, "clonekey:") {
+		parts := strings.SplitN(strings.TrimPrefix(action, "clonekey:"), ":", 3)
+		if len(parts) != 3 {
+			return
+		}
+		catID, err1 := strconv.ParseInt(parts[0], 10, 64)
+		targetChatID, err2 := strconv.ParseInt(parts[1], 10, 64)
+		threadID, err3 := strconv.Atoi(parts[2])
+		if err1 != nil || err2 != nil || err3 != nil {
+			return
+		}
+		src, err := h.storage.GetCategory(ctx, catID)
+		if err != nil {
+			return
+		}
+
+		sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
+			ChatID: msg.Chat.ID,
+			Text:   fmt.Sprintf("✓ Cloning: %s %s\n\nEnter new Linear team key (current: %s):", src.Emoji, src.Name, src.LinearTeamKey),
+		})
+		if err != nil {
+			log.Printf("❌ clonekey SendMessage: %v", err)
+			return
+		}
+
+		h.mu.Lock()
+		h.states[stateKey{UserID: query.From.ID}] = &pendingAdminSession{
+			Cmd:               AdminCmdCloneCategory,
+			Step:              StepAdminCatTeamKey,
+			MessageID:         sentMsg.ID,
+			ChatID:            msg.Chat.ID,
+			UserID:            query.From.ID,
+			CategoryID:        catID,
+			CategoryName:      src.Name,
+			TeamKey:           src.LinearTeamKey,
+			TargetGroupChatID: targetChatID,
+			ThreadID:          threadID,
+		}
+		h.mu.Unlock()
+		return
+	}
 }
 
 func (h *Handler) showGroupPickerForCatMgr(ctx context.Context, b *tgbot.Bot, chatID int64, editMsgID int, catID int64, action string) {
@@ -300,6 +405,102 @@ func (h *Handler) showGroupPickerForCatMgr(ctx context.Context, b *tgbot.Bot, ch
 		Text:        "🏘 Select group:",
 		ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows},
 	})
+}
+
+// showCloneTopicPicker shows group-level option + all topics for clone target selection.
+func (h *Handler) showCloneTopicPicker(ctx context.Context, b *tgbot.Bot, chatID int64, editMsgID int, catID int64, targetChatID int64) {
+	groupName := h.getGroupName(targetChatID)
+	topics := h.getTopics(targetChatID)
+
+	rows := [][]models.InlineKeyboardButton{
+		{{
+			Text:         "🏘 Group-level (no topic)",
+			CallbackData: fmt.Sprintf("catmgr:clonetopic:%d:%d:0", catID, targetChatID),
+		}},
+	}
+	for threadID, topicName := range topics {
+		rows = append(rows, []models.InlineKeyboardButton{{
+			Text:         "📌 " + topicName,
+			CallbackData: fmt.Sprintf("catmgr:clonetopic:%d:%d:%d", catID, targetChatID, threadID),
+		}})
+	}
+	rows = append(rows, []models.InlineKeyboardButton{{
+		Text:         "⬅ Back",
+		CallbackData: fmt.Sprintf("catmgr:clone:%d", catID),
+	}})
+
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      chatID,
+		MessageID:   editMsgID,
+		Text:        "📌 Clone to: " + groupName + "\n\nSelect scope:",
+		ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows},
+	})
+}
+
+// showCloneKeyStep shows the Linear key confirmation step before cloning.
+func (h *Handler) showCloneKeyStep(ctx context.Context, b *tgbot.Bot, chatID int64, editMsgID int, userID int64, catID int64, targetChatID int64, threadID int) {
+	src, err := h.storage.GetCategory(ctx, catID)
+	if err != nil {
+		return
+	}
+
+	rows := [][]models.InlineKeyboardButton{
+		{{
+			Text:         "✅ Keep: " + src.LinearTeamKey,
+			CallbackData: fmt.Sprintf("catmgr:clonesame:%d:%d:%d", catID, targetChatID, threadID),
+		}},
+		{{
+			Text:         "✏️ Change key",
+			CallbackData: fmt.Sprintf("catmgr:clonekey:%d:%d:%d", catID, targetChatID, threadID),
+		}},
+		{{
+			Text:         "⬅ Back",
+			CallbackData: fmt.Sprintf("catmgr:clonegrp:%d:%d", catID, targetChatID),
+		}},
+	}
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      chatID,
+		MessageID:   editMsgID,
+		Text:        "Linear team key for the clone:",
+		ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows},
+	})
+}
+
+// execClone performs the actual clone and shows the result.
+func (h *Handler) execClone(ctx context.Context, b *tgbot.Bot, chatID int64, editMsgID int, userID int64, catID int64, targetChatID int64, threadID int, teamKey string) {
+	var scopeChatID *int64
+	var scopeThreadID *int
+	if targetChatID != 0 {
+		scopeChatID = &targetChatID
+	}
+	if threadID != 0 {
+		scopeThreadID = &threadID
+	}
+
+	newCatID, err := h.storage.CloneCategory(ctx, catID, scopeChatID, scopeThreadID, teamKey)
+	if err != nil {
+		log.Printf("❌ CloneCategory: %v", err)
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    chatID,
+			MessageID: editMsgID,
+			Text:      fmt.Sprintf("❌ Clone failed: %v", err),
+		})
+		return
+	}
+
+	src, _ := h.storage.GetCategory(ctx, catID)
+	catName := fmt.Sprintf("ID %d", catID)
+	if src != nil {
+		catName = src.Emoji + " " + src.Name
+	}
+	log.Printf("✓ Cloned category %d (%s) → new ID %d (team: %s)", catID, catName, newCatID, teamKey)
+
+	// Clean up any clone session
+	h.mu.Lock()
+	delete(h.states, stateKey{UserID: userID})
+	h.mu.Unlock()
+
+	h.sendCategoryList(ctx, b, chatID, editMsgID)
 }
 
 func (h *Handler) showTopicPickerForCatMgr(ctx context.Context, b *tgbot.Bot, chatID int64, editMsgID int, catID int64, targetChatID int64) {

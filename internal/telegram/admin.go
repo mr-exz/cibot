@@ -126,10 +126,9 @@ func (h *Handler) handleSetWorkHours(ctx context.Context, b *tgbot.Bot, msg *mod
 	keyboard := buildPersonKeyboard(persons)
 	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
 		ChatID:          msg.Chat.ID,
-		Text:            "👤 **Select person:**",
+		Text:            "👤 Select person:",
 		ReplyMarkup:     keyboard,
 		MessageThreadID: msg.MessageThreadID,
-		ParseMode:       models.ParseModeMarkdown,
 	})
 	if err != nil {
 		log.Printf("❌ Failed to send message: %v", err)
@@ -471,14 +470,14 @@ func (h *Handler) handleRotation(ctx context.Context, b *tgbot.Bot, msg *models.
 	}
 
 	var response string
-	response = "📋 **Current On-Duty Support**\n\n"
+	response = "📋 Current On-Duty Support\n\n"
 
 	for _, duty := range duties {
 		status := "🟢"
 		if !duty.Online {
 			status = "🔴"
 		}
-		response += fmt.Sprintf("%s **%s** → %s %s\n  🔵 @%s | 🔷 @%s\n\n",
+		response += fmt.Sprintf("%s %s → %s %s\n  🔵 @%s | 🔷 @%s\n\n",
 			duty.Category.Emoji,
 			duty.Category.Name,
 			duty.Person.Name,

@@ -2,7 +2,13 @@
 
 ## [0.0.31]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- Clone category — tap 📋 Clone on any category in `/categories` to duplicate it to a different group/topic; choose target group, then scope (group-level or a specific topic), then keep the same Linear team key or enter a new one; the clone copies the category name, emoji, and all linked request types
+
+### Fixed
+- All `**markdown**` syntax removed from Telegram message strings; rule documented in CLAUDE.md — `ParseMode` must never be used in this codebase and markdown syntax renders as literal characters without it
+- `msg.From == nil` nil panic on service messages and anonymous admin posts in `handleMessage`
+- `/support` title step error now logged when `EditMessageText` fails silently
 
 
 ## [0.0.30]

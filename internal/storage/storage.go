@@ -262,6 +262,40 @@ func (d *DB) DeleteCategory(ctx context.Context, categoryID int64) error {
 	return err
 }
 
+// CloneCategory creates a new category with the same name/emoji as the source but a new scope
+// and optionally a new Linear team key. All request type links are copied to the new category.
+func (d *DB) CloneCategory(ctx context.Context, sourceCatID int64, chatID *int64, threadID *int, teamKey string) (int64, error) {
+	src, err := d.GetCategory(ctx, sourceCatID)
+	if err != nil {
+		return 0, fmt.Errorf("source category not found: %w", err)
+	}
+
+	result, err := d.db.ExecContext(ctx,
+		"INSERT INTO categories (name, emoji, linear_team_key, chat_id, thread_id) VALUES (?, ?, ?, ?, ?)",
+		src.Name, src.Emoji, teamKey, chatID, threadID)
+	if err != nil {
+		return 0, err
+	}
+	newCatID, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	// Copy all type links from source category
+	types, err := d.ListRequestTypesForCategory(ctx, sourceCatID)
+	if err != nil {
+		return newCatID, err
+	}
+	for _, rt := range types {
+		if _, err := d.db.ExecContext(ctx,
+			"INSERT OR IGNORE INTO category_request_types (category_id, request_type_id) VALUES (?, ?)",
+			newCatID, rt.ID); err != nil {
+			return newCatID, err
+		}
+	}
+	return newCatID, nil
+}
+
 // === Request Types ===
 
 func (d *DB) ListAllRequestTypes(ctx context.Context) ([]RequestType, error) {
