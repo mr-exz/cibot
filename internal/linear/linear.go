@@ -396,7 +396,7 @@ func (c *Client) createLabel(ctx context.Context, labelName, teamID string) (str
 	return labelID, nil
 }
 
-func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, assigneeUsername string, labels []string) (string, error) {
+func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, assigneeUsername string, labels []string, priority int) (string, error) {
 	// Resolve team key to UUID
 	teamID, err := c.resolveTeamID(ctx, teamKey)
 	if err != nil {
@@ -427,13 +427,14 @@ func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, a
 	}
 
 	// Build mutation query
-	query := `mutation CreateIssue($title: String!, $description: String, $teamId: String!, $assigneeId: String, $labelIds: [String!]) {
+	query := `mutation CreateIssue($title: String!, $description: String, $teamId: String!, $assigneeId: String, $labelIds: [String!], $priority: Int) {
 		issueCreate(input: {
 			title: $title
 			description: $description
 			teamId: $teamId
 			assigneeId: $assigneeId
 			labelIds: $labelIds
+			priority: $priority
 		}) {
 			issue {
 				id
@@ -457,6 +458,10 @@ func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, a
 	// Only include labels if resolved
 	if len(labelIDs) > 0 {
 		variables["labelIds"] = labelIDs
+	}
+	// Only include priority if set (0 = not set)
+	if priority > 0 {
+		variables["priority"] = priority
 	}
 
 	payload := map[string]interface{}{

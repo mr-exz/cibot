@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -125,51 +126,28 @@ func (h *Handler) handleCategoryCallback(ctx context.Context, b *tgbot.Bot, upda
 	pending.CategoryName = cat.Name
 	pending.TeamKey = cat.LinearTeamKey
 
-	// Handle different flows
-	if pending.Flow == FlowTicket {
-		// For ticket flow: show request types or create immediately
-		h.mu.Unlock()
-		if len(types) == 0 {
-			// No request types, create immediately
-			h.createTicketIssue(ctx, b, pending)
-		} else {
-			// Show request type keyboard
-			keyboard := buildRequestTypeKeyboard(types)
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:      pending.ChatID,
-				MessageID:   pending.MessageID,
-				Text:        fmt.Sprintf("✓ %s selected.\n\n📋 **Select request type:**", cat.Emoji+" "+cat.Name),
-				ReplyMarkup: keyboard,
-			})
-			h.mu.Lock()
-			pending.Step = StepRequestType
-			h.mu.Unlock()
-		}
-	} else {
-		// Support flow: ask for request type or title
-		// Edit message to ask for request type
-		if len(types) == 0 {
-			// No request types, skip to title
-			pending.Step = StepTitle
-			h.mu.Unlock()
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    pending.ChatID,
-				MessageID: pending.MessageID,
-				Text:      fmt.Sprintf("✓ %s selected.\n\n📝 **Enter issue title:**", cat.Emoji+" "+cat.Name),
-			})
-		} else {
-			// Show request type keyboard
-			pending.Step = StepRequestType
-			h.mu.Unlock()
+	catLabel := cat.Emoji + " " + cat.Name
 
-			keyboard := buildRequestTypeKeyboard(types)
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:      pending.ChatID,
-				MessageID:   pending.MessageID,
-				Text:        fmt.Sprintf("✓ %s selected.\n\n📋 **Select request type:**", cat.Emoji+" "+cat.Name),
-				ReplyMarkup: keyboard,
-			})
-		}
+	if len(types) == 0 {
+		// No request types — skip to priority
+		pending.Step = StepPriority
+		h.mu.Unlock()
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:      pending.ChatID,
+			MessageID:   pending.MessageID,
+			Text:        "✓ " + catLabel + "\n\nSelect priority:",
+			ReplyMarkup: buildPriorityKeyboard(),
+		})
+	} else {
+		// Show request type keyboard
+		pending.Step = StepRequestType
+		h.mu.Unlock()
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:      pending.ChatID,
+			MessageID:   pending.MessageID,
+			Text:        "✓ " + catLabel + "\n\n📋 Select request type:",
+			ReplyMarkup: buildRequestTypeKeyboard(types),
+		})
 	}
 }
 
@@ -218,19 +196,58 @@ func (h *Handler) handleRequestTypeCallback(ctx context.Context, b *tgbot.Bot, u
 		log.Printf("⚠️  Failed to resolve type name for ID %d: %v", pending.TypeID, err)
 	}
 
+	h.mu.Lock()
+	pending.Step = StepPriority
+	h.mu.Unlock()
+
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      pending.ChatID,
+		MessageID:   pending.MessageID,
+		Text:        "✓ " + pending.TypeName + "\n\nSelect priority:",
+		ReplyMarkup: buildPriorityKeyboard(),
+	})
+}
+
+// handlePriorityCallback handles priority selection for both /support and /ticket flows.
+func (h *Handler) handlePriorityCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+
+	priority, err := strconv.Atoi(strings.TrimPrefix(query.Data, "prio:"))
+	if err != nil {
+		return
+	}
+
+	key := stateKey{UserID: query.From.ID}
+	h.mu.Lock()
+	pending, ok := h.states[key].(*pendingSession)
+	h.mu.Unlock()
+	if !ok || pending == nil || pending.Step != StepPriority {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		return
+	}
+
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+		Text:            "✓ " + priorityLabel(priority),
+	})
+
+	h.mu.Lock()
+	pending.Priority = priority
+	h.mu.Unlock()
+
 	if pending.Flow == FlowTicket {
-		// Ticket flow: create issue immediately
 		h.createTicketIssue(ctx, b, pending)
 	} else {
-		// Support flow: ask for title
 		h.mu.Lock()
 		pending.Step = StepTitle
 		h.mu.Unlock()
-
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    pending.ChatID,
 			MessageID: pending.MessageID,
-			Text:      fmt.Sprintf("✓ %s selected.\n\n📝 **Enter issue title:**", pending.TypeName),
+			Text:      "✓ " + priorityLabel(priority) + "\n\n📝 Enter issue title:",
 		})
 	}
 }
@@ -337,7 +354,7 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 		}
 
 		// Create Linear issue with category and type as labels
-		url, err := h.linear.CreateIssue(ctx, title, description, teamKey, assignee, []string{pending.CategoryName, pending.TypeName})
+		url, err := h.linear.CreateIssue(ctx, title, description, teamKey, assignee, []string{pending.CategoryName, pending.TypeName}, pending.Priority)
 		if err != nil {
 			log.Printf("❌ Failed to create Linear issue: %v\n", err)
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{

@@ -65,6 +65,7 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	// Register callback query handlers
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "cat:", tgbot.MatchTypePrefix, h.handleCategoryCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "type:", tgbot.MatchTypePrefix, h.handleRequestTypeCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "prio:", tgbot.MatchTypePrefix, h.handlePriorityCallback)
 
 	// Admin flow callbacks
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "grp:", tgbot.MatchTypePrefix, h.handleAdminTopicGroupCallback)

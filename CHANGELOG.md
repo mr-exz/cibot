@@ -2,7 +2,8 @@
 
 ## [0.0.28]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- Priority selection step in `/support` and `/ticket` flows — after request type (or category if no types), a priority keyboard is shown: 🔴 P0 — now, 🟠 P1 — today, 🟡 P2 — week, 🔵 P3 — later; maps to Linear priority values Urgent/High/Medium/Low and is passed in the `issueCreate` mutation
 
 
 ## [0.0.27]

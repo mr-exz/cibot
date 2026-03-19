@@ -61,6 +61,34 @@ func buildCategoryKeyboard(categories []storage.Category) *models.InlineKeyboard
 	return buildKeyboard(items, "cat:")
 }
 
+// buildPriorityKeyboard creates the hardcoded priority selection keyboard.
+// Linear priority values: 1=Urgent, 2=High, 3=Medium, 4=Low
+func buildPriorityKeyboard() *models.InlineKeyboardMarkup {
+	return &models.InlineKeyboardMarkup{
+		InlineKeyboard: [][]models.InlineKeyboardButton{
+			{{Text: "🔴 P0 — now", CallbackData: "prio:1"}, {Text: "🟠 P1 — today", CallbackData: "prio:2"}},
+			{{Text: "🟡 P2 — week", CallbackData: "prio:3"}, {Text: "🔵 P3 — later", CallbackData: "prio:4"}},
+			{{Text: "❌ Cancel", CallbackData: "cancel"}},
+		},
+	}
+}
+
+// priorityLabel returns the display label for a Linear priority value.
+func priorityLabel(p int) string {
+	switch p {
+	case 1:
+		return "🔴 P0 — now"
+	case 2:
+		return "🟠 P1 — today"
+	case 3:
+		return "🟡 P2 — week"
+	case 4:
+		return "🔵 P3 — later"
+	default:
+		return "—"
+	}
+}
+
 // buildRequestTypeKeyboard creates a keyboard from request type list
 func buildRequestTypeKeyboard(types []storage.RequestType) *models.InlineKeyboardMarkup {
 	items := make([]ButtonItem, len(types))

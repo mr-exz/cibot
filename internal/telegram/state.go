@@ -28,6 +28,7 @@ const (
 const (
 	StepCategory    = "category"
 	StepRequestType = "request_type"
+	StepPriority    = "priority"
 	StepTitle       = "title"
 	StepDescription = "description"
 )
@@ -84,6 +85,7 @@ type pendingSession struct {
 	TeamKey      string
 	TypeID       int64
 	TypeName     string
+	Priority     int    // Linear priority: 1=Urgent(P0), 2=High(P1), 3=Medium(P2), 4=Low(P3)
 	Title        string
 	MediaLinks   []string
 	MessageID    int
