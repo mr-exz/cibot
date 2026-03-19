@@ -536,6 +536,253 @@ func (h *Handler) handleAdminCategoryCallback(ctx context.Context, b *tgbot.Bot,
 	}
 }
 
+// ===== Hierarchical category picker for admin flows =====
+
+// startAdminCategoryPicker sends the top-level hierarchical category keyboard.
+// Used by /addtype, /addperson, /setrotation.
+func (h *Handler) startAdminCategoryPicker(ctx context.Context, b *tgbot.Bot, msg *models.Message, cmd AdminCmd) {
+	categories, err := h.storage.ListCategories(ctx)
+	if err != nil {
+		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to load categories: %v", err))
+		return
+	}
+	if len(categories) == 0 {
+		h.sendMessage(ctx, b, msg, "❌ No categories yet. Create one with /addcategory")
+		return
+	}
+
+	keyboard := h.buildAdminCatTopKeyboard(categories)
+	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
+		ChatID:          msg.Chat.ID,
+		Text:            "🗂️ Select category:",
+		ReplyMarkup:     keyboard,
+		MessageThreadID: msg.MessageThreadID,
+	})
+	if err != nil {
+		log.Printf("❌ Failed to send message: %v", err)
+		return
+	}
+
+	h.mu.Lock()
+	h.states[stateKey{UserID: msg.From.ID}] = &pendingAdminSession{
+		Cmd:       cmd,
+		Step:      StepCategory,
+		MessageID: sentMsg.ID,
+		ChatID:    msg.Chat.ID,
+		UserID:    msg.From.ID,
+		CreatedAt: time.Now(),
+	}
+	h.mu.Unlock()
+	log.Printf("✓ Started /%s flow for %s", cmd, msg.From.Username)
+}
+
+// buildAdminCatTopKeyboard builds the top-level category picker:
+// global categories as direct buttons, groups as navigation buttons.
+func (h *Handler) buildAdminCatTopKeyboard(categories []storage.Category) *models.InlineKeyboardMarkup {
+	rows := make([][]models.InlineKeyboardButton, 0)
+
+	// Global categories first (no group/topic scope)
+	for _, cat := range categories {
+		if cat.ChatID == nil {
+			rows = append(rows, []models.InlineKeyboardButton{{
+				Text:         cat.Emoji + " " + cat.Name,
+				CallbackData: fmt.Sprintf("cat:%d", cat.ID),
+			}})
+		}
+	}
+
+	// Groups that have at least one scoped category
+	seenGroups := make(map[int64]bool)
+	for _, cat := range categories {
+		if cat.ChatID != nil && !seenGroups[*cat.ChatID] {
+			seenGroups[*cat.ChatID] = true
+			rows = append(rows, []models.InlineKeyboardButton{{
+				Text:         "🏘️ " + h.getGroupName(*cat.ChatID),
+				CallbackData: fmt.Sprintf("acat_grp:%d", *cat.ChatID),
+			}})
+		}
+	}
+
+	rows = append(rows, []models.InlineKeyboardButton{{Text: "❌ Cancel", CallbackData: "cancel"}})
+	return &models.InlineKeyboardMarkup{InlineKeyboard: rows}
+}
+
+// buildAdminCatGroupKeyboard builds group-level category picker:
+// group-scoped categories + topics that have scoped categories.
+func (h *Handler) buildAdminCatGroupKeyboard(chatID int64, categories []storage.Category) *models.InlineKeyboardMarkup {
+	rows := make([][]models.InlineKeyboardButton, 0)
+
+	// Group-level categories (scoped to group but not a specific topic)
+	for _, cat := range categories {
+		if cat.ChatID != nil && *cat.ChatID == chatID && cat.ThreadID == nil {
+			rows = append(rows, []models.InlineKeyboardButton{{
+				Text:         cat.Emoji + " " + cat.Name,
+				CallbackData: fmt.Sprintf("cat:%d", cat.ID),
+			}})
+		}
+	}
+
+	// Topics that have topic-scoped categories in this group
+	topics := h.getTopics(chatID)
+	seenTopics := make(map[int]bool)
+	for _, cat := range categories {
+		if cat.ChatID != nil && *cat.ChatID == chatID && cat.ThreadID != nil && !seenTopics[*cat.ThreadID] {
+			seenTopics[*cat.ThreadID] = true
+			topicName := topics[*cat.ThreadID]
+			if topicName == "" {
+				topicName = fmt.Sprintf("Topic %d", *cat.ThreadID)
+			}
+			rows = append(rows, []models.InlineKeyboardButton{{
+				Text:         "📌 " + topicName,
+				CallbackData: fmt.Sprintf("acat_topic:%d:%d", chatID, *cat.ThreadID),
+			}})
+		}
+	}
+
+	rows = append(rows, []models.InlineKeyboardButton{
+		{Text: "⬅️ Back", CallbackData: "acat_back"},
+		{Text: "❌ Cancel", CallbackData: "cancel"},
+	})
+	return &models.InlineKeyboardMarkup{InlineKeyboard: rows}
+}
+
+// buildAdminCatTopicKeyboard builds topic-level category picker.
+func (h *Handler) buildAdminCatTopicKeyboard(chatID int64, threadID int, categories []storage.Category) *models.InlineKeyboardMarkup {
+	rows := make([][]models.InlineKeyboardButton, 0)
+
+	for _, cat := range categories {
+		if cat.ChatID != nil && *cat.ChatID == chatID && cat.ThreadID != nil && *cat.ThreadID == threadID {
+			rows = append(rows, []models.InlineKeyboardButton{{
+				Text:         cat.Emoji + " " + cat.Name,
+				CallbackData: fmt.Sprintf("cat:%d", cat.ID),
+			}})
+		}
+	}
+
+	rows = append(rows, []models.InlineKeyboardButton{
+		{Text: "⬅️ Back", CallbackData: fmt.Sprintf("acat_grp:%d", chatID)},
+		{Text: "❌ Cancel", CallbackData: "cancel"},
+	})
+	return &models.InlineKeyboardMarkup{InlineKeyboard: rows}
+}
+
+// handleAdminCatGrpNav handles tapping a group button in the category picker.
+func (h *Handler) handleAdminCatGrpNav(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+	key := stateKey{UserID: query.From.ID}
+	h.mu.Lock()
+	admin, ok := h.states[key].(*pendingAdminSession)
+	h.mu.Unlock()
+	if !ok || admin == nil || admin.Step != StepCategory {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		return
+	}
+
+	chatID, err := strconv.ParseInt(strings.TrimPrefix(query.Data, "acat_grp:"), 10, 64)
+	if err != nil {
+		return
+	}
+
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	categories, err := h.storage.ListCategories(ctx)
+	if err != nil {
+		return
+	}
+
+	keyboard := h.buildAdminCatGroupKeyboard(chatID, categories)
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      admin.ChatID,
+		MessageID:   admin.MessageID,
+		Text:        "🏘️ " + h.getGroupName(chatID) + " — select category:",
+		ReplyMarkup: keyboard,
+	})
+}
+
+// handleAdminCatTopicNav handles tapping a topic button in the category picker.
+func (h *Handler) handleAdminCatTopicNav(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+	key := stateKey{UserID: query.From.ID}
+	h.mu.Lock()
+	admin, ok := h.states[key].(*pendingAdminSession)
+	h.mu.Unlock()
+	if !ok || admin == nil || admin.Step != StepCategory {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		return
+	}
+
+	parts := strings.SplitN(strings.TrimPrefix(query.Data, "acat_topic:"), ":", 2)
+	if len(parts) != 2 {
+		return
+	}
+	chatID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return
+	}
+	threadID, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return
+	}
+
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	categories, err := h.storage.ListCategories(ctx)
+	if err != nil {
+		return
+	}
+
+	topics := h.getTopics(chatID)
+	topicName := topics[threadID]
+	if topicName == "" {
+		topicName = fmt.Sprintf("Topic %d", threadID)
+	}
+
+	keyboard := h.buildAdminCatTopicKeyboard(chatID, threadID, categories)
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      admin.ChatID,
+		MessageID:   admin.MessageID,
+		Text:        "🏘️ " + h.getGroupName(chatID) + "  ·  📌 " + topicName + " — select category:",
+		ReplyMarkup: keyboard,
+	})
+}
+
+// handleAdminCatBack handles the ⬅️ Back button — returns to the top-level picker.
+func (h *Handler) handleAdminCatBack(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+	key := stateKey{UserID: query.From.ID}
+	h.mu.Lock()
+	admin, ok := h.states[key].(*pendingAdminSession)
+	h.mu.Unlock()
+	if !ok || admin == nil || admin.Step != StepCategory {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		return
+	}
+
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	categories, err := h.storage.ListCategories(ctx)
+	if err != nil {
+		return
+	}
+
+	keyboard := h.buildAdminCatTopKeyboard(categories)
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      admin.ChatID,
+		MessageID:   admin.MessageID,
+		Text:        "🗂️ Select category:",
+		ReplyMarkup: keyboard,
+	})
+}
+
 // ===== Callback handlers for admin flows =====
 
 func (h *Handler) handleAdminConfirmCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {

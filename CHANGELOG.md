@@ -2,7 +2,8 @@
 
 ## [0.0.27]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/addtype`, `/addperson`, `/setrotation` — category picker is now hierarchical: global categories shown at the top level; groups with scoped categories appear as navigation buttons; tapping a group shows group-level categories and any topics that have topic-level categories; ⬅️ Back navigates up the tree
 
 
 ## [0.0.26]

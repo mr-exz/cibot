@@ -96,128 +96,17 @@ func (h *Handler) handleAddCategory(ctx context.Context, b *tgbot.Bot, msg *mode
 
 // handleAddType starts the /addtype interactive flow
 func (h *Handler) handleAddType(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
-	// Get categories to show selection
-	categories, err := h.storage.ListCategories(ctx)
-	if err != nil {
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to load categories: %v", err))
-		return
-	}
-
-	if len(categories) == 0 {
-		h.sendMessage(ctx, b, msg, "❌ No categories available. Create one first with /addcategory")
-		return
-	}
-
-	keyboard := buildCategoryKeyboard(categories)
-	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
-		ChatID:          msg.Chat.ID,
-		Text:            "🗂️ **Select category:**",
-		ReplyMarkup:     keyboard,
-		MessageThreadID: msg.MessageThreadID,
-		ParseMode:       models.ParseModeMarkdown,
-	})
-	if err != nil {
-		log.Printf("❌ Failed to send message: %v", err)
-		return
-	}
-
-	key := stateKey{UserID: msg.From.ID}
-	h.mu.Lock()
-	h.states[key] = &pendingAdminSession{
-		Cmd:       AdminCmdAddType,
-		Step:      StepCategory,
-		MessageID: sentMsg.ID,
-		ChatID:    msg.Chat.ID,
-		ThreadID:  msg.MessageThreadID,
-		UserID:    msg.From.ID,
-	}
-	h.mu.Unlock()
-
-	log.Printf("✓ Started /addtype flow for %s", msg.From.Username)
+	h.startAdminCategoryPicker(ctx, b, msg, AdminCmdAddType)
 }
 
 // handleAddPerson starts the /addperson interactive flow
 func (h *Handler) handleAddPerson(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
-	// Get categories to show selection
-	categories, err := h.storage.ListCategories(ctx)
-	if err != nil {
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to load categories: %v", err))
-		return
-	}
-
-	if len(categories) == 0 {
-		h.sendMessage(ctx, b, msg, "❌ No categories available. Create one first with /addcategory")
-		return
-	}
-
-	keyboard := buildCategoryKeyboard(categories)
-	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
-		ChatID:          msg.Chat.ID,
-		Text:            "🗂️ **Select category:**",
-		ReplyMarkup:     keyboard,
-		MessageThreadID: msg.MessageThreadID,
-		ParseMode:       models.ParseModeMarkdown,
-	})
-	if err != nil {
-		log.Printf("❌ Failed to send message: %v", err)
-		return
-	}
-
-	key := stateKey{UserID: msg.From.ID}
-	h.mu.Lock()
-	h.states[key] = &pendingAdminSession{
-		Cmd:       AdminCmdAddPerson,
-		Step:      StepCategory,
-		MessageID: sentMsg.ID,
-		ChatID:    msg.Chat.ID,
-		ThreadID:  msg.MessageThreadID,
-		UserID:    msg.From.ID,
-	}
-	h.mu.Unlock()
-
-	log.Printf("✓ Started /addperson flow for %s", msg.From.Username)
+	h.startAdminCategoryPicker(ctx, b, msg, AdminCmdAddPerson)
 }
 
 // handleSetRotation starts the /setrotation interactive flow
 func (h *Handler) handleSetRotation(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
-	// Get categories to show selection
-	categories, err := h.storage.ListCategories(ctx)
-	if err != nil {
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to load categories: %v", err))
-		return
-	}
-
-	if len(categories) == 0 {
-		h.sendMessage(ctx, b, msg, "❌ No categories available. Create one first with /addcategory")
-		return
-	}
-
-	keyboard := buildCategoryKeyboard(categories)
-	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
-		ChatID:          msg.Chat.ID,
-		Text:            "🗂️ **Select category:**",
-		ReplyMarkup:     keyboard,
-		MessageThreadID: msg.MessageThreadID,
-		ParseMode:       models.ParseModeMarkdown,
-	})
-	if err != nil {
-		log.Printf("❌ Failed to send message: %v", err)
-		return
-	}
-
-	key := stateKey{UserID: msg.From.ID}
-	h.mu.Lock()
-	h.states[key] = &pendingAdminSession{
-		Cmd:       AdminCmdSetRotation,
-		Step:      StepCategory,
-		MessageID: sentMsg.ID,
-		ChatID:    msg.Chat.ID,
-		ThreadID:  msg.MessageThreadID,
-		UserID:    msg.From.ID,
-	}
-	h.mu.Unlock()
-
-	log.Printf("✓ Started /setrotation flow for %s", msg.From.Username)
+	h.startAdminCategoryPicker(ctx, b, msg, AdminCmdSetRotation)
 }
 
 // handleSetWorkHours starts the /setworkhours interactive flow
