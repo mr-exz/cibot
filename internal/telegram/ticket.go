@@ -11,10 +11,11 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
-// handleTicketStart initiates the /ticket flow from a replied-to message.
+// handleTicketStart initiates the /ticket flow. If msg is a reply, the replied-to
+// message is used as the ticket source. Otherwise it falls back to the support flow.
 func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	if msg.ReplyToMessage == nil {
-		h.sendMessage(ctx, b, msg, "❌ Reply to a message with /ticket to create a ticket from it.")
+		h.handleSupportStart(ctx, b, msg)
 		return
 	}
 

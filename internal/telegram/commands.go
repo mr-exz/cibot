@@ -36,14 +36,8 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler: h.handleVersion,
 		},
 		{
-			Name:    "support",
-			Desc:    "Create a support request",
-			Group:   "Support",
-			Handler: h.handleSupportStart,
-		},
-		{
 			Name:    "ticket",
-			Desc:    "Reply to a message with this to create a ticket",
+			Desc:    "Create a ticket (reply to a message to use it as source)",
 			Group:   "Support",
 			Handler: h.handleTicketStart,
 		},

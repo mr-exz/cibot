@@ -12,8 +12,13 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
-// handleSupportStart initiates the /support flow
+// handleSupportStart initiates the /support flow, or the /ticket flow if msg is a reply.
 func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
+	if msg.ReplyToMessage != nil {
+		h.handleTicketStart(ctx, b, msg)
+		return
+	}
+
 	log.Printf("✓ Processing /support command from chat_id: %d\n", msg.Chat.ID)
 
 	// Load categories from DB (topic-aware: show global + topic-specific categories)

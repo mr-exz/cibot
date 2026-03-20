@@ -2,7 +2,9 @@
 
 ## [0.0.34]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/support` and `/ticket` merged into a single `/ticket` command — if used as a reply, the replied-to message is used as the ticket source (immediate creation after category/type/priority); if used standalone, the full support flow runs (category → type → priority → title → description)
+- `/support` command removed
 
 
 ## [0.0.33]
