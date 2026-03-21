@@ -11,18 +11,18 @@ import (
 
 // Entry holds metadata for a single captured message.
 type Entry struct {
-	Timestamp  time.Time
-	ChatID     int64
-	ChatTitle  string
-	ThreadID   int
-	TopicName  string
-	UserID     int64
-	Username   string
-	FirstName  string
-	LastName   string
-	MessageID  int
-	Text       string // message text or "[photo]", "[video]", etc.
-	ChatType   string // "private", "group", "supergroup"
+	Timestamp time.Time
+	ChatID    int64
+	ChatTitle string
+	ThreadID  int
+	TopicName string
+	UserID    int64
+	Username  string
+	FirstName string
+	LastName  string
+	MessageID int
+	Text      string // message text or "[photo]", "[video]", etc.
+	ChatType  string // "private", "group", "supergroup"
 }
 
 // Logger appends message entries to a CSV file.

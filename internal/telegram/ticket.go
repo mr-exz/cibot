@@ -44,24 +44,11 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		return
 	}
 
-	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
-		ChatID:          msg.Chat.ID,
-		Text:            "🗂️ Select category for this ticket:",
-		ReplyMarkup:     buildCategoryKeyboard(categories),
-		MessageThreadID: msg.MessageThreadID,
-	})
-	if err != nil {
-		log.Printf("❌ Failed to send message: %v\n", err)
-		return
-	}
+	linearUsername, _ := h.storage.GetUserLinearUsername(ctx, msg.From.ID)
 
-	key := stateKey{UserID: msg.From.ID}
-	h.mu.Lock()
-	h.states[key] = &pendingSession{
+	session := &pendingSession{
 		Flow:             FlowTicket,
-		Step:             StepCategory,
 		UserID:           msg.From.ID,
-		MessageID:        sentMsg.ID,
 		ChatID:           msg.Chat.ID,
 		ThreadID:         msg.MessageThreadID,
 		CreatedAt:        time.Now(),
@@ -71,6 +58,33 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		ReporterName:     reporterName,
 		ReporterUsername: reporterUsername,
 	}
+
+	var sentMsg *models.Message
+	if linearUsername == "" {
+		session.Step = StepLinearAccount
+		sentMsg, err = b.SendMessage(ctx, &tgbot.SendMessageParams{
+			ChatID:          msg.Chat.ID,
+			Text:            "👤 Please enter your Linear username to link your account:",
+			MessageThreadID: msg.MessageThreadID,
+		})
+	} else {
+		session.Step = StepCategory
+		sentMsg, err = b.SendMessage(ctx, &tgbot.SendMessageParams{
+			ChatID:          msg.Chat.ID,
+			Text:            "🗂️ Select category for this ticket:",
+			ReplyMarkup:     buildCategoryKeyboard(categories),
+			MessageThreadID: msg.MessageThreadID,
+		})
+	}
+	if err != nil {
+		log.Printf("❌ Failed to send message: %v\n", err)
+		return
+	}
+
+	session.MessageID = sentMsg.ID
+	key := stateKey{UserID: msg.From.ID}
+	h.mu.Lock()
+	h.states[key] = session
 	h.mu.Unlock()
 
 	log.Printf("✓ /ticket started by %s for message from %s (%s)", msg.From.Username, reporterName, reporterUsername)

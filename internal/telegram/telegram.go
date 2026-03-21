@@ -49,7 +49,7 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 		cmdHandlers: make(map[string]cmdHandler),
 	}
 
-	// Build command registry — single source of truth for dispatch and /help
+	// Build command registry — single source of truth for dispatch and /start
 	for _, cmd := range h.registerCommands() {
 		h.cmdRegistry = append(h.cmdRegistry, cmd)
 		h.cmdHandlers[cmd.Name] = cmd.Handler
@@ -152,10 +152,10 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 
 	chatType := string(msg.Chat.Type)
 
-	// Private chats: only admins allowed
+	// Private chats: allow admins and members of approved groups
 	if chatType == "private" {
-		if !isAdmin(h.cfg, msg.From.Username) {
-			log.Printf("⏭️ Ignoring DM from non-admin @%s\n", msg.From.Username)
+		if !isAdmin(h.cfg, msg.From.Username) && !h.isApprovedGroupMember(ctx, b, msg.From.ID) {
+			log.Printf("⏭️ Ignoring DM from @%s — not admin and not in any approved group\n", msg.From.Username)
 			return
 		}
 	} else {
@@ -220,9 +220,7 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 	if hasPending && !isCommand(msg.Text) {
 		// Handle pending sessions (support/ticket flows)
 		if pendingSess, ok := pending.(*pendingSession); ok {
-			if pendingSess.Flow == FlowSupport {
-				h.handleSupportPendingIssue(ctx, b, msg, pendingSess)
-			}
+			h.handleSupportPendingIssue(ctx, b, msg, pendingSess)
 			return
 		}
 
@@ -233,13 +231,13 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 		}
 	}
 
-	// Parse command (handles both /help and /help@botname)
+	// Parse command (handles both /start and /start@botname formats)
 	cmd := parseCommand(msg.Text)
 	if cmd == "" {
 		return
 	}
 
-	if cmd == "help" {
+	if cmd == "start" {
 		params := &tgbot.SendMessageParams{
 			ChatID: msg.Chat.ID,
 			Text:   h.buildHelpText(msg.From.Username),
@@ -277,7 +275,30 @@ func (h *Handler) sendMessage(ctx context.Context, b *tgbot.Bot, msg *models.Mes
 	b.SendMessage(ctx, params)
 }
 
-// parseCommand extracts command from text, handling both /help and /help@botname formats
+// isApprovedGroupMember returns true if the user is a member (or admin/creator) of at least one approved group.
+func (h *Handler) isApprovedGroupMember(ctx context.Context, b *tgbot.Bot, userID int64) bool {
+	groupIDs, err := h.storage.ListApprovedGroupIDs(ctx)
+	if err != nil {
+		log.Printf("⚠️  isApprovedGroupMember: failed to list groups: %v", err)
+		return false
+	}
+	for _, chatID := range groupIDs {
+		member, err := b.GetChatMember(ctx, &tgbot.GetChatMemberParams{
+			ChatID: chatID,
+			UserID: userID,
+		})
+		if err != nil {
+			continue
+		}
+		switch member.Type {
+		case models.ChatMemberTypeOwner, models.ChatMemberTypeAdministrator, models.ChatMemberTypeMember, models.ChatMemberTypeRestricted:
+			return true
+		}
+	}
+	return false
+}
+
+// parseCommand extracts command from text, handling both /start and /start@botname formats
 func parseCommand(text string) string {
 	if !strings.HasPrefix(text, "/") {
 		return ""

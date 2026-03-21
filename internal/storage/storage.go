@@ -568,6 +568,24 @@ func (d *DB) IsGroupApproved(ctx context.Context, chatID int64) (bool, error) {
 	return approved == 1, err
 }
 
+// ListApprovedGroupIDs returns the chat IDs of all approved groups.
+func (d *DB) ListApprovedGroupIDs(ctx context.Context) ([]int64, error) {
+	rows, err := d.db.QueryContext(ctx, "SELECT chat_id FROM group_chats WHERE approved = 1")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // ListGroups returns all known groups ordered by approved desc, added_at asc.
 func (d *DB) ListGroups(ctx context.Context) ([]GroupChat, error) {
 	rows, err := d.db.QueryContext(ctx,
@@ -685,6 +703,25 @@ func (d *DB) CountUsers(ctx context.Context) (int, error) {
 	var n int
 	err := d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM telegram_user_metadata").Scan(&n)
 	return n, err
+}
+
+// GetUserLinearUsername returns the stored Linear username for a Telegram user_id, or "" if not set.
+func (d *DB) GetUserLinearUsername(ctx context.Context, userID int64) (string, error) {
+	var username string
+	err := d.db.QueryRowContext(ctx,
+		"SELECT COALESCE(linear_username,'') FROM telegram_user_metadata WHERE user_id = ?", userID).Scan(&username)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return username, err
+}
+
+// SetUserLinearUsername stores or updates the Linear username for a Telegram user_id.
+func (d *DB) SetUserLinearUsername(ctx context.Context, userID int64, linearUsername string) error {
+	_, err := d.db.ExecContext(ctx,
+		"UPDATE telegram_user_metadata SET linear_username = ? WHERE user_id = ?",
+		linearUsername, userID)
+	return err
 }
 
 // === Helper to create initial assignment ===

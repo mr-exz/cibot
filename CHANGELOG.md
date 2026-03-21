@@ -2,7 +2,16 @@
 
 ## [0.0.35]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- Linear account linking — on first `/ticket` use, the bot asks the user for their Linear username and saves it against their Telegram user ID; subsequent uses skip the prompt
+- `/mylinear` command — lets any user set or update their Linear username at any time; shows current value if already set
+- DM access for group members — non-admin users can now DM the bot if they are a member of at least one approved group (checked via `getChatMember`); admin commands remain admin-only
+- `/start` command — replaces `/help` as the bot entry point; Telegram shows it automatically as a button on first open
+- `linear_username` column added to `telegram_user_metadata` (migration 007)
+- `ListApprovedGroupIDs` storage method for membership checks
+
+### Changed
+- Text input during an active ticket session is now routed through the pending-session handler for both `FlowTicket` and `FlowSupport`
 
 
 ## [0.0.34]

@@ -11,7 +11,6 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
-
 func (h *Handler) handleGroups(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	h.sendGroupsList(ctx, b, msg.Chat.ID, 0)
 }

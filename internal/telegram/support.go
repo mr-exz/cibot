@@ -33,13 +33,33 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 		return
 	}
 
-	// Build inline keyboard
-	keyboard := buildCategoryKeyboard(categories)
+	linearUsername, _ := h.storage.GetUserLinearUsername(ctx, msg.From.ID)
+	reporterName := strings.TrimSpace(msg.From.FirstName + " " + msg.From.LastName)
 
-	params := &tgbot.SendMessageParams{
-		ChatID:      msg.Chat.ID,
-		Text:        "🗂️ Select issue category:",
-		ReplyMarkup: keyboard,
+	session := &pendingSession{
+		Flow:             FlowSupport,
+		UserID:           msg.From.ID,
+		ChatID:           msg.Chat.ID,
+		ThreadID:         msg.MessageThreadID,
+		CreatedAt:        time.Now(),
+		ReporterName:     reporterName,
+		ReporterUsername: msg.From.Username,
+	}
+
+	var params *tgbot.SendMessageParams
+	if linearUsername == "" {
+		session.Step = StepLinearAccount
+		params = &tgbot.SendMessageParams{
+			ChatID: msg.Chat.ID,
+			Text:   "👤 Please enter your Linear username to link your account:",
+		}
+	} else {
+		session.Step = StepCategory
+		params = &tgbot.SendMessageParams{
+			ChatID:      msg.Chat.ID,
+			Text:        "🗂️ Select issue category:",
+			ReplyMarkup: buildCategoryKeyboard(categories),
+		}
 	}
 	if msg.MessageThreadID != 0 {
 		params.MessageThreadID = msg.MessageThreadID
@@ -51,21 +71,46 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 		return
 	}
 
-	reporterName := strings.TrimSpace(msg.From.FirstName + " " + msg.From.LastName)
+	session.MessageID = sentMsg.ID
+	key := stateKey{UserID: msg.From.ID}
+	h.mu.Lock()
+	h.states[key] = session
+	h.mu.Unlock()
+}
 
-	// Store session state
+// handleMyLinear handles /mylinear — lets a user set or update their Linear username.
+func (h *Handler) handleMyLinear(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
+	current, _ := h.storage.GetUserLinearUsername(ctx, msg.From.ID)
+
+	text := "👤 Enter your Linear username:"
+	if current != "" {
+		text = "👤 Current Linear account: " + current + "\n\nEnter a new username to update:"
+	}
+
+	params := &tgbot.SendMessageParams{
+		ChatID: msg.Chat.ID,
+		Text:   text,
+	}
+	if msg.MessageThreadID != 0 {
+		params.MessageThreadID = msg.MessageThreadID
+	}
+
+	sentMsg, err := b.SendMessage(ctx, params)
+	if err != nil {
+		log.Printf("❌ Failed to send message: %v", err)
+		return
+	}
+
 	key := stateKey{UserID: msg.From.ID}
 	h.mu.Lock()
 	h.states[key] = &pendingSession{
-		Flow:             FlowSupport,
-		Step:             StepCategory,
-		UserID:           msg.From.ID,
-		MessageID:        sentMsg.ID,
-		ChatID:           msg.Chat.ID,
-		ThreadID:         msg.MessageThreadID,
-		CreatedAt:        time.Now(),
-		ReporterName:     reporterName,
-		ReporterUsername: msg.From.Username,
+		Flow:      FlowUpdateLinear,
+		Step:      StepLinearAccount,
+		UserID:    msg.From.ID,
+		MessageID: sentMsg.ID,
+		ChatID:    msg.Chat.ID,
+		ThreadID:  msg.MessageThreadID,
+		CreatedAt: time.Now(),
 	}
 	h.mu.Unlock()
 }
@@ -257,12 +302,70 @@ func (h *Handler) handlePriorityCallback(ctx context.Context, b *tgbot.Bot, upda
 	}
 }
 
-// handleSupportPendingIssue handles multi-step flow for support requests
+// handleSupportPendingIssue handles multi-step flow for support and ticket requests
 func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, msg *models.Message, pending *pendingSession) {
 	key := stateKey{UserID: msg.From.ID}
 	text := strings.TrimSpace(msg.Text)
 
 	switch pending.Step {
+	case StepLinearAccount:
+		if text == "" {
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:    pending.ChatID,
+				MessageID: pending.MessageID,
+				Text:      "❌ Linear username cannot be empty. Please enter your Linear username:",
+			})
+			return
+		}
+
+		if err := h.storage.SetUserLinearUsername(ctx, pending.UserID, text); err != nil {
+			log.Printf("⚠️  Failed to save linear username for user %d: %v", pending.UserID, err)
+		}
+
+		log.Printf("✓ Linear username set for user %d: %s", pending.UserID, text)
+
+		// Standalone update — just confirm and done
+		if pending.Flow == FlowUpdateLinear {
+			h.mu.Lock()
+			delete(h.states, key)
+			h.mu.Unlock()
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:    pending.ChatID,
+				MessageID: pending.MessageID,
+				Text:      "✅ Linear account set: " + text,
+			})
+			return
+		}
+
+		categories, err := h.storage.ListCategoriesForContext(ctx, pending.ChatID, pending.ThreadID)
+		if err != nil || len(categories) == 0 {
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:    pending.ChatID,
+				MessageID: pending.MessageID,
+				Text:      "❌ No categories configured. Contact admin.",
+			})
+			h.mu.Lock()
+			delete(h.states, key)
+			h.mu.Unlock()
+			return
+		}
+
+		prompt := "🗂️ Select issue category:"
+		if pending.Flow == FlowTicket {
+			prompt = "🗂️ Select category for this ticket:"
+		}
+
+		h.mu.Lock()
+		pending.Step = StepCategory
+		h.mu.Unlock()
+
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:      pending.ChatID,
+			MessageID:   pending.MessageID,
+			Text:        "✓ Linear account linked.\n\n" + prompt,
+			ReplyMarkup: buildCategoryKeyboard(categories),
+		})
+
 	case StepTitle:
 		if text == "" {
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{

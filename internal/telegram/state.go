@@ -6,32 +6,34 @@ import "time"
 type FlowType string
 
 const (
-	FlowSupport FlowType = "support" // self-service /support flow
-	FlowTicket  FlowType = "ticket"  // support-assisted /ticket flow
-	FlowAdmin   FlowType = "admin"   // admin configuration flow
+	FlowSupport      FlowType = "support"       // self-service /ticket flow
+	FlowTicket       FlowType = "ticket"        // reply-based /ticket flow
+	FlowAdmin        FlowType = "admin"         // admin configuration flow
+	FlowUpdateLinear FlowType = "update_linear" // /mylinear account update
 )
 
 // AdminCmd represents a specific admin command
 type AdminCmd string
 
 const (
-	AdminCmdAddCategory    AdminCmd = "addcategory"
-	AdminCmdAddType        AdminCmd = "addtype"
-	AdminCmdAddPerson      AdminCmd = "addperson"
-	AdminCmdSetRotation    AdminCmd = "setrotation"
-	AdminCmdSetWorkHours   AdminCmd = "setworkhours"
-	AdminCmdAddTopic       AdminCmd = "addtopic"
-	AdminCmdSetLabel       AdminCmd = "setlabel"
-	AdminCmdCloneCategory  AdminCmd = "clonecategory"
+	AdminCmdAddCategory   AdminCmd = "addcategory"
+	AdminCmdAddType       AdminCmd = "addtype"
+	AdminCmdAddPerson     AdminCmd = "addperson"
+	AdminCmdSetRotation   AdminCmd = "setrotation"
+	AdminCmdSetWorkHours  AdminCmd = "setworkhours"
+	AdminCmdAddTopic      AdminCmd = "addtopic"
+	AdminCmdSetLabel      AdminCmd = "setlabel"
+	AdminCmdCloneCategory AdminCmd = "clonecategory"
 )
 
 // Step constants for the multi-step issue creation flow
 const (
-	StepCategory    = "category"
-	StepRequestType = "request_type"
-	StepPriority    = "priority"
-	StepTitle       = "title"
-	StepDescription = "description"
+	StepLinearAccount = "linear_account" // ask user to link their Linear username
+	StepCategory      = "category"
+	StepRequestType   = "request_type"
+	StepPriority      = "priority"
+	StepTitle         = "title"
+	StepDescription   = "description"
 )
 
 // Admin flow steps
@@ -90,7 +92,7 @@ type pendingSession struct {
 	TeamKey      string
 	TypeID       int64
 	TypeName     string
-	Priority     int    // Linear priority: 1=Urgent(P0), 2=High(P1), 3=Medium(P2), 4=Low(P3)
+	Priority     int // Linear priority: 1=Urgent(P0), 2=High(P1), 3=Medium(P2), 4=Low(P3)
 	Title        string
 	MediaLinks   []string
 	MessageID    int

@@ -42,6 +42,12 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler: h.handleTicketStart,
 		},
 		{
+			Name:    "mylinear",
+			Desc:    "Set or update your Linear account",
+			Group:   "Support",
+			Handler: h.handleMyLinear,
+		},
+		{
 			Name:      "addcategory",
 			Desc:      "Add a support category",
 			Group:     "Admin",
@@ -147,7 +153,7 @@ func (h *Handler) buildHelpText(username string) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString("Available commands:\n")
+	sb.WriteString("Hi! Here are the available commands:\n")
 
 	for _, group := range groupOrder {
 		cmds, ok := grouped[group]
