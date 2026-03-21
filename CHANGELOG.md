@@ -2,7 +2,14 @@
 
 ## [0.0.37]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/users` detail view — tapping a user in the list opens an in-place detail view showing full name, Telegram username, and linked Linear account (or "not linked"), with Set Tag, Delete, and Back actions
+- `/users` list shows 🔷 indicator next to users who have a Linear account linked
+- `/start` now appears in the help output
+- `/ticket` in an unconfigured topic now lists which topics in the same group do have support configured, so users know where to go
+
+### Fixed
+- `/users` detail view always showed "not linked" for Linear — `GetUserByID` was not selecting `linear_username`
 
 
 ## [0.0.36]

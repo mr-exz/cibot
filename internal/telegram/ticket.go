@@ -40,7 +40,11 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		return
 	}
 	if len(categories) == 0 {
-		h.sendMessage(ctx, b, msg, "❌ No categories configured. Contact admin.")
+		if msg.Chat.Type == "private" {
+			h.sendMessage(ctx, b, msg, "⚠️ /ticket must be used in a group chat, not here in DM.")
+		} else {
+			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID))
+		}
 		return
 	}
 
@@ -114,6 +118,20 @@ func (h *Handler) handleCancelCallback(ctx context.Context, b *tgbot.Bot, update
 		Text:      "❌ Cancelled.",
 	})
 	log.Printf("✓ Flow cancelled by %s", query.From.Username)
+}
+
+// buildUnconfiguredTopicMsg returns a message for when /ticket is used in a group topic with no categories.
+// It lists other topics in the same group that do have categories configured.
+func (h *Handler) buildUnconfiguredTopicMsg(ctx context.Context, chatID int64) string {
+	topics, err := h.storage.ListConfiguredTopicsForChat(ctx, chatID)
+	if err != nil || len(topics) == 0 {
+		return "⚠️ This topic is not configured for support tickets yet. Contact an admin."
+	}
+	msg := "⚠️ This topic is not configured for support tickets yet.\n\nYou can use /ticket in:"
+	for _, t := range topics {
+		msg += "\n• " + t
+	}
+	return msg
 }
 
 // ticketTitle builds a Linear issue title from the first 5 words of the message body and its date.

@@ -29,7 +29,11 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 	}
 
 	if len(categories) == 0 {
-		h.sendMessage(ctx, b, msg, "❌ No categories configured. Contact admin.")
+		if msg.Chat.Type == "private" {
+			h.sendMessage(ctx, b, msg, "⚠️ /ticket must be used in a group chat, not here in DM.")
+		} else {
+			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID))
+		}
 		return
 	}
 

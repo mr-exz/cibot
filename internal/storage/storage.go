@@ -231,6 +231,32 @@ func (d *DB) ListCategoriesForContext(ctx context.Context, chatID int64, threadI
 	return cats, rows.Err()
 }
 
+// ListConfiguredTopicsForChat returns topic names that have at least one category scoped to them in the given chat.
+func (d *DB) ListConfiguredTopicsForChat(ctx context.Context, chatID int64) ([]string, error) {
+	rows, err := d.db.QueryContext(ctx,
+		`SELECT gt.topic_name
+		 FROM categories c
+		 JOIN group_topics gt ON gt.chat_id = c.chat_id AND gt.thread_id = c.thread_id
+		 WHERE c.chat_id = ? AND c.thread_id IS NOT NULL
+		 GROUP BY gt.thread_id
+		 ORDER BY gt.topic_name`,
+		chatID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	return names, rows.Err()
+}
+
 func (d *DB) AddCategory(ctx context.Context, name, emoji, teamKey string) (int64, error) {
 	return d.AddCategoryWithTopic(ctx, name, emoji, teamKey, nil, nil)
 }
@@ -667,8 +693,8 @@ func (d *DB) LookupUserByUsername(ctx context.Context, username string) (int64, 
 func (d *DB) GetUserByID(ctx context.Context, userID int64) (*TelegramUser, error) {
 	var u TelegramUser
 	err := d.db.QueryRowContext(ctx,
-		"SELECT user_id, COALESCE(username,''), first_name, last_name FROM telegram_user_metadata WHERE user_id = ?",
-		userID).Scan(&u.UserID, &u.Username, &u.FirstName, &u.LastName)
+		"SELECT user_id, COALESCE(username,''), first_name, last_name, COALESCE(linear_username,'') FROM telegram_user_metadata WHERE user_id = ?",
+		userID).Scan(&u.UserID, &u.Username, &u.FirstName, &u.LastName, &u.LinearUsername)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
