@@ -12,6 +12,7 @@ type Config struct {
 	AdminUsernames map[string]bool // telegram username -> true (username without @)
 	DBPath         string
 	CSVPath        string
+	WebPort        string
 }
 
 func Load() *Config {
@@ -39,6 +40,11 @@ func Load() *Config {
 	// Default CSV path
 	if cfg.CSVPath == "" {
 		cfg.CSVPath = "messages.csv"
+	}
+
+	cfg.WebPort = os.Getenv("WEB_PORT")
+	if cfg.WebPort == "" {
+		cfg.WebPort = "8000"
 	}
 
 	// Parse ADMIN_USERNAMES (comma-separated Telegram usernames, with or without @)
