@@ -2,7 +2,10 @@
 
 ## [0.0.36]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/users` list — each user is now a single button; users with a linked Linear account show a 🔷 indicator
+- Tapping a user opens a detail view (edited in-place) showing full name, Telegram username, and Linear account (or "not linked"), with Set Tag, Delete, and Back actions
+- `/start` added to the command registry so it appears in the help output
 
 
 ## [0.0.35]

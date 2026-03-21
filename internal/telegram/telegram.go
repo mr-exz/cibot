@@ -82,7 +82,8 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "acat_grp:", tgbot.MatchTypePrefix, h.handleAdminCatGrpNav)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "acat_topic:", tgbot.MatchTypePrefix, h.handleAdminCatTopicNav)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "acat_back", tgbot.MatchTypeExact, h.handleAdminCatBack)
-	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usr:", tgbot.MatchTypePrefix, h.handleUserSelectCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usr:", tgbot.MatchTypePrefix, h.handleUserDetailCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usrst:", tgbot.MatchTypePrefix, h.handleUserSetTagCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usrc:", tgbot.MatchTypePrefix, h.handleUserClearCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usrp:", tgbot.MatchTypePrefix, h.handleUserPageCallback)
 
@@ -234,20 +235,6 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 	// Parse command (handles both /start and /start@botname formats)
 	cmd := parseCommand(msg.Text)
 	if cmd == "" {
-		return
-	}
-
-	if cmd == "start" {
-		params := &tgbot.SendMessageParams{
-			ChatID: msg.Chat.ID,
-			Text:   h.buildHelpText(msg.From.Username),
-		}
-		if msg.MessageThreadID != 0 {
-			params.MessageThreadID = msg.MessageThreadID
-		}
-		if _, err := b.SendMessage(ctx, params); err != nil {
-			log.Printf("❌ Failed to send help: %v", err)
-		}
 		return
 	}
 

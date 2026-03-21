@@ -253,14 +253,13 @@ func (h *Handler) sendUsersPage(ctx context.Context, b *tgbot.Bot, chatID int64,
 		if u.Username != "" {
 			label += " (@" + u.Username + ")"
 		}
+		if u.LinearUsername != "" {
+			label += " 🔷"
+		}
 		rows = append(rows, []models.InlineKeyboardButton{
 			{
-				Text:         "🏷 " + label,
-				CallbackData: fmt.Sprintf("usr:%d", u.UserID),
-			},
-			{
-				Text:         "🗑",
-				CallbackData: fmt.Sprintf("usrc:%d", u.UserID),
+				Text:         "👤 " + label,
+				CallbackData: fmt.Sprintf("usr:%d:%d", u.UserID, offset),
 			},
 		})
 	}
@@ -321,14 +320,77 @@ func (h *Handler) handleUserPageCallback(ctx context.Context, b *tgbot.Bot, upda
 	h.sendUsersPage(ctx, b, msg.Chat.ID, msg.ID, offset)
 }
 
-// handleUserSelectCallback handles tapping a user in /users — starts the setlabel flow.
-func (h *Handler) handleUserSelectCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+// handleUserDetailCallback handles tapping a user in /users — shows a detail view.
+func (h *Handler) handleUserDetailCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
 	query := update.CallbackQuery
 	if query == nil {
 		return
 	}
 
-	userID, err := strconv.ParseInt(strings.TrimPrefix(query.Data, "usr:"), 10, 64)
+	// data format: usr:{userID}:{offset}
+	parts := strings.SplitN(strings.TrimPrefix(query.Data, "usr:"), ":", 2)
+	userID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		return
+	}
+	offset := 0
+	if len(parts) == 2 {
+		offset, _ = strconv.Atoi(parts[1])
+	}
+
+	targetUser, err := h.storage.GetUserByID(ctx, userID)
+	if err != nil || targetUser == nil {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID, Text: "User not found"})
+		return
+	}
+
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	msg := query.Message.Message
+	if msg == nil {
+		return
+	}
+
+	name := strings.TrimSpace(targetUser.FirstName + " " + targetUser.LastName)
+	text := fmt.Sprintf("👤 %s", name)
+	if targetUser.Username != "" {
+		text += fmt.Sprintf("\n🔵 Telegram: @%s", targetUser.Username)
+	}
+	if targetUser.LinearUsername != "" {
+		text += fmt.Sprintf("\n🔷 Linear: @%s", targetUser.LinearUsername)
+	} else {
+		text += "\n🔷 Linear: not linked"
+	}
+
+	keyboard := &models.InlineKeyboardMarkup{
+		InlineKeyboard: [][]models.InlineKeyboardButton{
+			{
+				{Text: "🏷 Set Tag", CallbackData: fmt.Sprintf("usrst:%d", targetUser.UserID)},
+				{Text: "🗑 Delete", CallbackData: fmt.Sprintf("usrc:%d", targetUser.UserID)},
+			},
+			{
+				{Text: "◀ Back", CallbackData: fmt.Sprintf("usrp:%d", offset)},
+			},
+		},
+	}
+
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      msg.Chat.ID,
+		MessageID:   msg.ID,
+		Text:        text,
+		ReplyMarkup: keyboard,
+	})
+}
+
+// handleUserSetTagCallback handles Set Tag button in user detail — starts the setlabel flow.
+func (h *Handler) handleUserSetTagCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+
+	userID, err := strconv.ParseInt(strings.TrimPrefix(query.Data, "usrst:"), 10, 64)
 	if err != nil {
 		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
 		return

@@ -631,10 +631,11 @@ func (d *DB) GetUserLabel(ctx context.Context, telegramUsername string) (string,
 // === Telegram User Metadata ===
 
 type TelegramUser struct {
-	UserID    int64
-	Username  string
-	FirstName string
-	LastName  string
+	UserID         int64
+	Username       string
+	FirstName      string
+	LastName       string
+	LinearUsername string
 }
 
 // UpsertUserMeta stores or updates a user's profile data seen from any message.
@@ -680,7 +681,7 @@ func (d *DB) GetUserByID(ctx context.Context, userID int64) (*TelegramUser, erro
 // ListUsers returns a page of known users ordered by last_seen_at desc.
 func (d *DB) ListUsers(ctx context.Context, limit, offset int) ([]TelegramUser, error) {
 	rows, err := d.db.QueryContext(ctx,
-		"SELECT user_id, COALESCE(username,''), first_name, last_name FROM telegram_user_metadata ORDER BY last_seen_at DESC LIMIT ? OFFSET ?",
+		"SELECT user_id, COALESCE(username,''), first_name, last_name, COALESCE(linear_username,'') FROM telegram_user_metadata ORDER BY last_seen_at DESC LIMIT ? OFFSET ?",
 		limit, offset)
 	if err != nil {
 		return nil, err
@@ -690,7 +691,7 @@ func (d *DB) ListUsers(ctx context.Context, limit, offset int) ([]TelegramUser, 
 	var users []TelegramUser
 	for rows.Next() {
 		var u TelegramUser
-		if err := rows.Scan(&u.UserID, &u.Username, &u.FirstName, &u.LastName); err != nil {
+		if err := rows.Scan(&u.UserID, &u.Username, &u.FirstName, &u.LastName, &u.LinearUsername); err != nil {
 			return nil, err
 		}
 		users = append(users, u)

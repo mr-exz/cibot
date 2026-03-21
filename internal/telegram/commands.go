@@ -30,6 +30,12 @@ var groupOrder = []string{"Support", "Admin", "Topics"}
 func (h *Handler) registerCommands() []commandDef {
 	return []commandDef{
 		{
+			Name:    "start",
+			Desc:    "Show available commands",
+			Group:   "Support",
+			Handler: h.handleStart,
+		},
+		{
 			Name:    "version",
 			Desc:    "Show bot version",
 			Group:   "Support",
@@ -132,6 +138,10 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler:   h.handleListTopics,
 		},
 	}
+}
+
+func (h *Handler) handleStart(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
+	h.sendMessage(ctx, b, msg, h.buildHelpText(msg.From.Username))
 }
 
 func (h *Handler) handleVersion(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
