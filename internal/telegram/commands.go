@@ -124,6 +124,13 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler:   h.handleExport,
 		},
 		{
+			Name:      "offboard",
+			Desc:      "Remove a user from all bot-managed groups",
+			Group:     "Admin",
+			AdminOnly: true,
+			Handler:   h.handleOffboard,
+		},
+		{
 			Name:      "addtopic",
 			Desc:      "Register a forum topic",
 			Group:     "Topics",

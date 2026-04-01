@@ -24,6 +24,7 @@ const (
 	AdminCmdAddTopic      AdminCmd = "addtopic"
 	AdminCmdSetLabel      AdminCmd = "setlabel"
 	AdminCmdCloneCategory AdminCmd = "clonecategory"
+	AdminCmdOffboard      AdminCmd = "offboard"
 )
 
 // Step constants for the multi-step issue creation flow
@@ -79,6 +80,10 @@ const (
 
 	// clonecategory steps
 	StepAdminCloneKeyInput = "admin_clone_key_input"
+
+	// offboard steps
+	StepOffboardUsername = "offboard_username"
+	StepOffboardConfirm  = "offboard_confirm"
 )
 
 // pendingSession represents an in-progress issue creation session for a user
@@ -142,4 +147,9 @@ type pendingAdminSession struct {
 	LabelUserID   int64
 	LabelUsername string
 	LabelText     string
+
+	// offboard fields
+	OffboardUserID   int64
+	OffboardUsername string
+	OffboardGroupIDs []int64 // remaining groups to remove from
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/mr-exz/cibot/internal/linear"
 	"github.com/mr-exz/cibot/internal/storage"
 	"github.com/mr-exz/cibot/internal/telegram"
+	"github.com/mr-exz/cibot/internal/web"
 )
 
 var version = "dev"
@@ -32,6 +33,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create Linear client: %v", err)
 	}
+
+	// Initialize web server
+	webServer := web.New(db, linearClient, cfg.WebPort, cfg.WebDomain, cfg.WebCertDir)
+	go webServer.Start(ctx)
 
 	// Initialize Telegram bot
 	bot, err := telegram.New(ctx, linearClient, db, cfg, version)

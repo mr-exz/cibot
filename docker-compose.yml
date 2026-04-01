@@ -3,6 +3,10 @@ services:
     image: mrexz/cibot:latest
     restart: unless-stopped
     env_file: .env
+    ports:
+      - "8000:8000"
+      - "80:80"
+      - "443:443"
     volumes:
       - ./data:/data
     logging:
