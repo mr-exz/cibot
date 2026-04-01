@@ -2,7 +2,14 @@
 
 ## [0.0.38]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- **[Experimental]** Web ticket form at `GET /ticket` — browser-based ticket submission with cascading dropdowns (group → topic → category → request type → priority), reporter name, message body, and optional Telegram message link; creates a Linear issue via the same path as the bot including on-duty assignment
+- `/offboard` command — admin flow to remove a departed employee from all bot-managed groups; resolves `@username` to a user ID via the bot's metadata DB, checks membership in each approved group, then shows an inline keyboard to remove from groups one by one or all at once
+- `/ticket` reply flow now captures caption text from media messages — previously, replying to a photo+caption message produced an empty ticket body; the caption is now used as the message body
+- `/ticket` reply flow now extracts photo and document links from the replied message and includes them in the Linear issue description alongside the message text and source link
+
+### Changed
+- Port `8000` exposed in `docker-compose.yml` for the web server; configurable via `WEB_PORT` env var
 
 
 ## [0.0.37]

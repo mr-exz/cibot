@@ -35,7 +35,7 @@ func main() {
 	}
 
 	// Initialize web server
-	webServer := web.New(db, linearClient, cfg.WebPort)
+	webServer := web.New(db, linearClient, cfg.WebPort, cfg.WebDomain, cfg.WebCertDir)
 	go webServer.Start(ctx)
 
 	// Initialize Telegram bot

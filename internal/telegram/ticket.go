@@ -23,6 +23,26 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 
 	link := formatTelegramLink(msg.Chat.ID, msg.MessageThreadID, replied.ID)
 
+	// For media messages the text lives in Caption, not Text
+	body := replied.Text
+	if body == "" {
+		body = replied.Caption
+	}
+
+	// Extract media links from the replied message
+	var mediaLinks []string
+	if len(replied.Photo) > 0 {
+		photo := replied.Photo[len(replied.Photo)-1]
+		if file, err := b.GetFile(ctx, &tgbot.GetFileParams{FileID: photo.FileID}); err == nil && file != nil {
+			mediaLinks = append(mediaLinks, fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", h.cfg.TelegramToken, file.FilePath))
+		}
+	}
+	if replied.Document != nil {
+		if file, err := b.GetFile(ctx, &tgbot.GetFileParams{FileID: replied.Document.FileID}); err == nil && file != nil {
+			mediaLinks = append(mediaLinks, fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", h.cfg.TelegramToken, file.FilePath))
+		}
+	}
+
 	isForward := replied.ForwardOrigin != nil
 	log.Printf("🎫 /ticket reply target: msg_id=%d, from=%+v, is_forward=%v, forward_origin=%+v",
 		replied.ID, replied.From, isForward, replied.ForwardOrigin)
@@ -57,8 +77,9 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		ThreadID:         msg.MessageThreadID,
 		CreatedAt:        time.Now(),
 		TicketMsgLink:    link,
-		TicketMsgBody:    replied.Text,
+		TicketMsgBody:    body,
 		TicketMsgDate:    time.Unix(int64(replied.Date), 0),
+		MediaLinks:       mediaLinks,
 		ReporterName:     reporterName,
 		ReporterUsername: reporterUsername,
 	}
@@ -169,8 +190,17 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 		pending.TypeName,
 		pending.TicketMsgLink)
 
-	if pending.TicketMsgBody != "" {
-		description = fmt.Sprintf("**💬 Message**\n%s\n\n", pending.TicketMsgBody) + description
+	if pending.TicketMsgBody != "" || len(pending.MediaLinks) > 0 {
+		var msgSection string
+		if pending.TicketMsgBody != "" {
+			msgSection = fmt.Sprintf("**💬 Message**\n%s", pending.TicketMsgBody)
+		} else {
+			msgSection = "**💬 Message**"
+		}
+		if len(pending.MediaLinks) > 0 {
+			msgSection += formatMediaLinks(pending.MediaLinks)
+		}
+		description = msgSection + "\n\n" + description
 	}
 
 	// Get on-duty support person
