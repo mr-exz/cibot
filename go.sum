@@ -24,6 +24,7 @@ github.com/mr-exz/pskz-dns-api v0.0.3 h1:XVlC847yijVBcA+7vqZlig0K26OolJ+B/Zt2Wbg
 github.com/mr-exz/pskz-dns-api v0.0.3/go.mod h1:hbWOB4cNbZ+4rFrTJw7U4c71NXvjBatjZddXC767s5E=
 github.com/mr-exz/pskz-dns-api v0.0.4 h1:oNjUA0uKAWVYOAxnVJoqvySn2YOYEE5NYydIUv/KZVI=
 github.com/mr-exz/pskz-dns-api v0.0.4/go.mod h1:hbWOB4cNbZ+4rFrTJw7U4c71NXvjBatjZddXC767s5E=
+github.com/mr-exz/pskz-dns-api v0.0.5 h1:hAyxF02rH4YjYhPFjVyto8E30632Z2cGj5J+TaAfqqY=
 github.com/mr-exz/pskz-dns-api v0.0.5/go.mod h1:hbWOB4cNbZ+4rFrTJw7U4c71NXvjBatjZddXC767s5E=
 github.com/ncruces/go-strftime v1.0.0 h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOFAw7w=
 github.com/ncruces/go-strftime v1.0.0/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
