@@ -203,6 +203,7 @@ func (h *Handler) handleAdminDNSPending(ctx context.Context, b *tgbot.Bot, msg *
 			delete(h.states, key)
 			h.mu.Unlock()
 			if err != nil {
+				log.Printf("⚠️  DNS ListRecords %s: %v", text, err)
 				b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 					ChatID:    admin.ChatID,
 					MessageID: admin.MessageID,
@@ -210,6 +211,7 @@ func (h *Handler) handleAdminDNSPending(ctx context.Context, b *tgbot.Bot, msg *
 				})
 				return
 			}
+			log.Printf("✓ DNS ListRecords %s: %d records returned", text, len(records))
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    admin.ChatID,
 				MessageID: admin.MessageID,
