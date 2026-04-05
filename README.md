@@ -12,6 +12,7 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 - **Admin commands** for managing categories, topics, support staff, and rotation — usable via DM or group
 - **Linear label auto-creation** — category and request type labels created automatically if missing
 - **SQLite persistence** — all configuration stored in database with versioned migrations via `golang-migrate`
+- **DNS management** *(experimental)* — `/dns` admin command to list, add, and delete ps.kz DNS records from Telegram
 
 ## Core components
 
@@ -44,6 +45,7 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 │   │   ├── ticket.go     # Support-assisted /ticket flow
 │   │   ├── admin.go      # Admin command entry points
 │   │   ├── admin_flow.go # Admin multi-step flow handlers
+│   │   ├── dns.go        # DNS management flow (experimental)
 │   │   └── util.go       # Keyboard builders, link parsers
 │   ├── linear/           # Linear GraphQL client with label auto-creation and caching
 │   └── storage/          # SQLite (modernc, pure Go) with golang-migrate
@@ -62,6 +64,8 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 - `DB_PATH` (optional, default: `cibot.db`) — SQLite database file path
 - `ADMIN_USERNAMES` (optional) — Comma-separated Telegram usernames allowed to use admin commands (with or without @)
   - Example: `ADMIN_USERNAMES=@alice,@charlie`
+- `DNS_EMAIL` (optional) — ps.kz account email for DNS management; enables `/dns` when set together with `DNS_PASSWORD`
+- `DNS_PASSWORD` (optional) — ps.kz account password for DNS management
 
 ## Commands
 
@@ -96,6 +100,12 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 - `/topics` — List all registered topics *(admin only)*
 - `/rotation` — Show current on-duty assignments *(admin only)*
 - `/groups` — List all known groups with approve/disapprove buttons *(DM only)*
+- `/offboard` — Remove a departed user from all bot-managed groups
+- `/dns` *(experimental)* — Manage ps.kz DNS records; requires `DNS_EMAIL` and `DNS_PASSWORD` env vars
+  - **Accounts** — list billing accounts
+  - **List records** — view all records for a domain
+  - **Add record** — create a new DNS record (A, AAAA, CNAME, MX, TXT, NS, SRV, CAA) with confirmation step
+  - **Delete record** — pick a record from list and delete with confirmation
 - **Set member tag** — Forward any user message to the bot in DM → enter label (1–16 chars) → select group → tag applied
 
 ## Setup

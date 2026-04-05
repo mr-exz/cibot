@@ -131,6 +131,13 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler:   h.handleOffboard,
 		},
 		{
+			Name:      "dns",
+			Desc:      "Manage DNS records (experimental)",
+			Group:     "Admin",
+			AdminOnly: true,
+			Handler:   h.handleDNS,
+		},
+		{
 			Name:      "addtopic",
 			Desc:      "Register a forum topic",
 			Group:     "Topics",
