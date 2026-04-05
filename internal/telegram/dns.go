@@ -464,8 +464,17 @@ func (h *Handler) handleDNSConfirmCallback(ctx context.Context, b *tgbot.Bot, up
 		log.Printf("✓ DNS record created in %s by @%s: %s %s %s", state.DNSDomain, query.From.Username, record.Name, record.Type, record.Value)
 
 	case "del":
-		record, err := h.dns.DeleteRecord(ctx, state.DNSDomain, state.DNSRecordID)
-		if err != nil {
+		// Find the record details from state before deleting
+		var delName, delType, delValue string
+		for _, r := range state.DNSRecords {
+			if r.ID == state.DNSRecordID {
+				delName = r.Name
+				delType = r.Type
+				delValue = r.Value
+				break
+			}
+		}
+		if err := h.dns.DeleteRecord(ctx, state.DNSDomain, state.DNSRecordID); err != nil {
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    msg.Chat.ID,
 				MessageID: msg.ID,
@@ -477,9 +486,9 @@ func (h *Handler) handleDNSConfirmCallback(ctx context.Context, b *tgbot.Bot, up
 			ChatID:    msg.Chat.ID,
 			MessageID: msg.ID,
 			Text: fmt.Sprintf("Record deleted.\n\nName: %s\nType: %s\nValue: %s",
-				record.Name, record.Type, record.Value),
+				delName, delType, delValue),
 		})
-		log.Printf("✓ DNS record deleted from %s by @%s: %s %s", state.DNSDomain, query.From.Username, record.Name, record.Type)
+		log.Printf("✓ DNS record deleted from %s by @%s: %s %s", state.DNSDomain, query.From.Username, delName, delType)
 	}
 }
 
