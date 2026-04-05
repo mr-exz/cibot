@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	pskzdns "github.com/mr-exz/pskz-dns-api"
@@ -212,10 +213,25 @@ func (h *Handler) handleAdminDNSPending(ctx context.Context, b *tgbot.Bot, msg *
 				return
 			}
 			log.Printf("✓ DNS ListRecords %s: %d records returned", text, len(records))
+			if len(records) == 0 {
+				b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+					ChatID:    admin.ChatID,
+					MessageID: admin.MessageID,
+					Text:      fmt.Sprintf("No records found for %s.", text),
+				})
+				return
+			}
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    admin.ChatID,
 				MessageID: admin.MessageID,
-				Text:      formatDNSRecords(text, records),
+				Text:      fmt.Sprintf("Records for %s: sending %d records as file...", text, len(records)),
+			})
+			b.SendDocument(ctx, &tgbot.SendDocumentParams{
+				ChatID: admin.ChatID,
+				Document: &models.InputFileUpload{
+					Filename: fmt.Sprintf("records_%s.txt", text),
+					Data:     strings.NewReader(formatDNSRecordsText(text, records)),
+				},
 			})
 
 		case "add":
@@ -510,25 +526,12 @@ func formatDNSAccounts(accounts []pskzdns.Account) string {
 	return sb.String()
 }
 
-const telegramMaxLen = 4000 // leave headroom below Telegram's 4096 limit
-
-func formatDNSRecords(domain string, records []pskzdns.Record) string {
-	if len(records) == 0 {
-		return fmt.Sprintf("No records found for %s.", domain)
-	}
-	header := fmt.Sprintf("Records for %s (%d total):\n\n", domain, len(records))
+func formatDNSRecordsText(domain string, records []pskzdns.Record) string {
 	var sb strings.Builder
-	sb.WriteString(header)
-	shown := 0
+	sb.WriteString(fmt.Sprintf("DNS records for %s (%d total)\n", domain, len(records)))
+	sb.WriteString(strings.Repeat("-", 60) + "\n")
 	for _, r := range records {
-		line := fmt.Sprintf("%s  %s  TTL:%d  %s\n", r.Name, r.Type, r.TTL, r.Value)
-		if sb.Len()+len(line) > telegramMaxLen {
-			remaining := len(records) - shown
-			sb.WriteString(fmt.Sprintf("... and %d more records (truncated)", remaining))
-			break
-		}
-		sb.WriteString(line)
-		shown++
+		sb.WriteString(fmt.Sprintf("%-40s  %-6s  TTL:%-6d  %s\n", r.Name, r.Type, r.TTL, r.Value))
 	}
 	return sb.String()
 }
