@@ -474,7 +474,7 @@ func (h *Handler) handleDNSConfirmCallback(ctx context.Context, b *tgbot.Bot, up
 				break
 			}
 		}
-		if err := h.dns.DeleteRecord(ctx, state.DNSDomain, state.DNSRecordID); err != nil {
+		if _, err := h.dns.DeleteRecord(ctx, state.DNSDomain, state.DNSRecordID); err != nil {
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    msg.Chat.ID,
 				MessageID: msg.ID,
