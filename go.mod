@@ -5,7 +5,7 @@ go 1.26
 require (
 	github.com/go-telegram/bot v1.19.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
-	github.com/mr-exz/pskz-dns-api v0.0.4
+	github.com/mr-exz/pskz-dns-api v0.0.5
 	modernc.org/sqlite v1.46.1
 )
 
