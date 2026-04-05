@@ -510,14 +510,25 @@ func formatDNSAccounts(accounts []pskzdns.Account) string {
 	return sb.String()
 }
 
+const telegramMaxLen = 4000 // leave headroom below Telegram's 4096 limit
+
 func formatDNSRecords(domain string, records []pskzdns.Record) string {
 	if len(records) == 0 {
 		return fmt.Sprintf("No records found for %s.", domain)
 	}
+	header := fmt.Sprintf("Records for %s (%d total):\n\n", domain, len(records))
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Records for %s:\n\n", domain))
+	sb.WriteString(header)
+	shown := 0
 	for _, r := range records {
-		sb.WriteString(fmt.Sprintf("%s  %s  TTL:%d  %s\n", r.Name, r.Type, r.TTL, r.Value))
+		line := fmt.Sprintf("%s  %s  TTL:%d  %s\n", r.Name, r.Type, r.TTL, r.Value)
+		if sb.Len()+len(line) > telegramMaxLen {
+			remaining := len(records) - shown
+			sb.WriteString(fmt.Sprintf("... and %d more records (truncated)", remaining))
+			break
+		}
+		sb.WriteString(line)
+		shown++
 	}
 	return sb.String()
 }
