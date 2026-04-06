@@ -14,6 +14,7 @@ import (
 	"github.com/mr-exz/cibot/internal/linear"
 	"github.com/mr-exz/cibot/internal/msglog"
 	"github.com/mr-exz/cibot/internal/storage"
+	pskzdns "github.com/mr-exz/pskz-dns-api"
 )
 
 type stateKey struct {
@@ -33,6 +34,7 @@ type Handler struct {
 	knownUsers  map[int64]string         // user_id -> "username\x00first\x00last" fingerprint; skip DB write if unchanged
 	cmdRegistry []commandDef
 	cmdHandlers map[string]cmdHandler
+	dns         *pskzdns.Client // experimental DNS management
 }
 
 func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *config.Config, version string) (*tgbot.Bot, error) {
@@ -47,6 +49,17 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 		groups:      make(map[int64]string),
 		knownUsers:  make(map[int64]string),
 		cmdHandlers: make(map[string]cmdHandler),
+	}
+
+	// Initialize DNS client if credentials are configured (experimental)
+	if cfg.DNSEmail != "" && cfg.DNSPassword != "" {
+		dnsClient, dnsErr := pskzdns.Login(ctx, cfg.DNSEmail, cfg.DNSPassword)
+		if dnsErr != nil {
+			log.Printf("⚠️  DNS client init failed: %v", dnsErr)
+		} else {
+			h.dns = dnsClient
+			log.Printf("✓ DNS client initialized")
+		}
 	}
 
 	// Build command registry — single source of truth for dispatch and /start
@@ -90,6 +103,13 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	// offboard callbacks
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "offbrd_grp:", tgbot.MatchTypePrefix, h.handleOffboardGroupCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "offbrd_all:", tgbot.MatchTypePrefix, h.handleOffboardAllCallback)
+
+	// DNS management callbacks (experimental)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "dns_act:", tgbot.MatchTypePrefix, h.handleDNSActionCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "dns_acct:", tgbot.MatchTypePrefix, h.handleDNSAcctCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "dns_type:", tgbot.MatchTypePrefix, h.handleDNSTypeCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "dns_rec:", tgbot.MatchTypePrefix, h.handleDNSRecCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "dns_confirm:", tgbot.MatchTypePrefix, h.handleDNSConfirmCallback)
 
 	go h.sessionReaper(ctx)
 

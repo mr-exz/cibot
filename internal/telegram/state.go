@@ -25,6 +25,7 @@ const (
 	AdminCmdSetLabel      AdminCmd = "setlabel"
 	AdminCmdCloneCategory AdminCmd = "clonecategory"
 	AdminCmdOffboard      AdminCmd = "offboard"
+	AdminCmdDNS           AdminCmd = "dns"
 )
 
 // Step constants for the multi-step issue creation flow
@@ -84,6 +85,17 @@ const (
 	// offboard steps
 	StepOffboardUsername = "offboard_username"
 	StepOffboardConfirm  = "offboard_confirm"
+
+	// dns steps
+	StepDNSMenu       = "dns_menu"
+	StepDNSSelectAcct = "dns_select_acct"
+	StepDNSDomain     = "dns_domain"
+	StepDNSSelectRec  = "dns_select_rec"
+	StepDNSRecName    = "dns_rec_name"
+	StepDNSRecType    = "dns_rec_type"
+	StepDNSRecValue   = "dns_rec_value"
+	StepDNSRecTTL     = "dns_rec_ttl"
+	StepDNSConfirm    = "dns_confirm"
 )
 
 // pendingSession represents an in-progress issue creation session for a user
@@ -152,4 +164,15 @@ type pendingAdminSession struct {
 	OffboardUserID   int64
 	OffboardUsername string
 	OffboardGroupIDs []int64 // remaining groups to remove from
+
+	// DNS management fields (experimental)
+	DNSAction      string // "accounts", "list", "add", "del"
+	DNSAccountID   int
+	DNSDomain      string
+	DNSRecordName  string
+	DNSRecordType  string
+	DNSRecordValue string
+	DNSRecordTTL   int
+	DNSRecordID    string      // selected record ID for delete flow
+	DNSRecords     []dnsRecord // fetched records for delete flow
 }

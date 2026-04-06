@@ -34,6 +34,8 @@ func (h *Handler) handleAdminPendingInput(ctx context.Context, b *tgbot.Bot, msg
 		h.handleAdminCloneCategoryPending(ctx, b, msg, admin)
 	case AdminCmdOffboard:
 		h.handleOffboardPending(ctx, b, msg, admin)
+	case AdminCmdDNS:
+		h.handleAdminDNSPending(ctx, b, msg, admin)
 	}
 }
 

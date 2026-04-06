@@ -2,7 +2,13 @@
 
 ## [0.0.39]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- **[Experimental]** `/dns` admin command — manage ps.kz DNS records from Telegram; available to admins only; requires `DNS_EMAIL` and `DNS_PASSWORD` env vars
+  - **Accounts** — list all ps.kz billing accounts linked to the configured credentials
+  - **List records** — select account, enter domain name, view all DNS records
+  - **Add record** — select account, enter domain, name, type (A/AAAA/CNAME/MX/TXT/NS/SRV/CAA), value, TTL; confirm before creating
+  - **Delete record** — select account, enter domain, pick record from list; confirm before deleting
+  - Uses `github.com/mr-exz/pskz-dns-api` GraphQL client; all operations logged
 
 
 ## [0.0.38]

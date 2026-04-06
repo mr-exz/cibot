@@ -15,6 +15,10 @@ type Config struct {
 	WebPort        string
 	WebDomain      string // if set, enables Let's Encrypt TLS (listens on :443 + :80 redirect)
 	WebCertDir     string // directory to cache Let's Encrypt certificates
+
+	// DNS management (experimental)
+	DNSEmail    string
+	DNSPassword string
 }
 
 func Load() *Config {
@@ -55,6 +59,9 @@ func Load() *Config {
 	if cfg.WebCertDir == "" {
 		cfg.WebCertDir = "/data/autocert"
 	}
+
+	cfg.DNSEmail = os.Getenv("DNS_EMAIL")
+	cfg.DNSPassword = os.Getenv("DNS_PASSWORD")
 
 	// Parse ADMIN_USERNAMES (comma-separated Telegram usernames, with or without @)
 	adminUserStr := os.Getenv("ADMIN_USERNAMES")
