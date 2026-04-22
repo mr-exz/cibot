@@ -2,7 +2,10 @@
 
 ## [0.0.42]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/topics` now shows `chat_id` next to each group name and `thread_id` as a plain number (e.g. `thread 123 — Name`) to make duplicates and ID mismatches visible
+- `/addtopic` group selection step now displays `chat_id` in the header after a group is chosen
+- `/addtopic` confirmation message now shows `chat_id`, `thread_id`, and `name` on separate lines instead of a compact summary
 
 
 ## [0.0.41]

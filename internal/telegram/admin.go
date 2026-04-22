@@ -213,9 +213,9 @@ func (h *Handler) handleListTopics(ctx context.Context, b *tgbot.Bot, msg *model
 
 	for chatID, topics := range allTopics {
 		groupName := h.getGroupName(chatID)
-		sb.WriteString(fmt.Sprintf("\n%s:\n", groupName))
+		sb.WriteString(fmt.Sprintf("\n%s (chat_id: %d):\n", groupName, chatID))
 		for threadID, topicName := range topics {
-			sb.WriteString(fmt.Sprintf("  🔹 #%d — %s\n", threadID, topicName))
+			sb.WriteString(fmt.Sprintf("  🔹 thread %d — %s\n", threadID, topicName))
 		}
 	}
 

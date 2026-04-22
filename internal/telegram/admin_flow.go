@@ -1186,7 +1186,7 @@ func (h *Handler) handleAdminTopicGroupCallback(ctx context.Context, b *tgbot.Bo
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    adminPending.ChatID,
 		MessageID: adminPending.MessageID,
-		Text:      "📝 Enter topic name:",
+		Text:      fmt.Sprintf("🏘️ %s (chat_id: %d)\n\n📝 Enter topic name:", h.getGroupName(selectedChatID), selectedChatID),
 	})
 }
 
@@ -1230,7 +1230,7 @@ func (h *Handler) handleAdminAddTopicPending(ctx context.Context, b *tgbot.Bot, 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✅ Topic registered!\n\n🔹 #%d — %s\n\nNow available in /addcategory", topicID, admin.TopicName),
+			Text:      fmt.Sprintf("✅ Topic registered!\n\nchat_id: %d\nthread_id: %d\nname: %s\n\nNow available in /addcategory", admin.SelectedChatID, topicID, admin.TopicName),
 		})
 
 		log.Printf("✓ Topic #%d registered for chat %d: %s", topicID, admin.SelectedChatID, admin.TopicName)
