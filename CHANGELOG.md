@@ -2,7 +2,8 @@
 
 ## [0.0.44]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- `/addperson` — adding a person whose `telegram_username` already exists in another category now reuses the existing record and creates the new assignment instead of failing with a UNIQUE constraint error; same `INSERT OR IGNORE` + SELECT pattern used by `/addtype`
 
 
 ## [0.0.43]

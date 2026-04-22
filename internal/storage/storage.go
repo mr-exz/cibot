@@ -410,13 +410,18 @@ func (d *DB) AddSupportPerson(ctx context.Context, name, telegramUsername, linea
 }
 
 func (d *DB) AddSupportPersonFull(ctx context.Context, name, telegramUsername, linearUsername, timezone, workHours, workDays string) (int64, error) {
-	result, err := d.db.ExecContext(ctx,
-		"INSERT INTO support_persons (name, telegram_username, linear_username, timezone, work_hours, work_days) VALUES (?, ?, ?, ?, ?, ?)",
+	// INSERT OR IGNORE so adding the same person to a second category reuses the existing record.
+	// LastInsertId is unreliable after INSERT OR IGNORE, so always SELECT afterwards.
+	_, err := d.db.ExecContext(ctx,
+		"INSERT OR IGNORE INTO support_persons (name, telegram_username, linear_username, timezone, work_hours, work_days) VALUES (?, ?, ?, ?, ?, ?)",
 		name, telegramUsername, linearUsername, timezone, workHours, workDays)
 	if err != nil {
 		return 0, err
 	}
-	return result.LastInsertId()
+	var id int64
+	err = d.db.QueryRowContext(ctx,
+		"SELECT id FROM support_persons WHERE telegram_username = ?", telegramUsername).Scan(&id)
+	return id, err
 }
 
 func (d *DB) SetPersonWorkHours(ctx context.Context, telegramUsername, timezone, workHours, workDays string) error {
