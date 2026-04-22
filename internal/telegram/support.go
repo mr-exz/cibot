@@ -480,11 +480,14 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 		assigneeStr := "(unassigned)"
 		if onDutyResult != nil && onDutyResult.Person != nil {
 			person := onDutyResult.Person
-			status := "🟢"
+			onlineIcon := "🟢"
 			if !onDutyResult.Online {
-				status = "🔴"
+				onlineIcon = "🔴"
 			}
-			assigneeStr = fmt.Sprintf("%s %s\n  🔵 Telegram: @%s\n  🔷 Linear: @%s", person.Name, status, person.TelegramUsername, person.LinearUsername)
+			assigneeStr = fmt.Sprintf("%s %s\n  🔵 Telegram: @%s\n  🔷 Linear: @%s", person.Name, onlineIcon, person.TelegramUsername, person.LinearUsername)
+			if person.Status != "" {
+				assigneeStr += "\n  " + statusEmoji(person.Status) + " " + person.Status
+			}
 		}
 
 		finalText := fmt.Sprintf(

@@ -54,6 +54,18 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler: h.handleMyLinear,
 		},
 		{
+			Name:    "oncall",
+			Desc:    "Show who is on support duty right now",
+			Group:   "Support",
+			Handler: h.handleOnCall,
+		},
+		{
+			Name:    "status",
+			Desc:    "Set your support status (lunch, brb, away, back)",
+			Group:   "Support",
+			Handler: h.handleSetStatus,
+		},
+		{
 			Name:      "addcategory",
 			Desc:      "Add a support category",
 			Group:     "Admin",

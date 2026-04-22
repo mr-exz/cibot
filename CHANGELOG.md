@@ -2,7 +2,12 @@
 
 ## [0.0.40]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/oncall` command (public, available to all group members) — shows who is on support duty right now for each category configured in the current topic/group; displays name, `@username`, and availability status (🟢 available / 🔴 offline with work hours / 🍽 lunch / ⏸ BRB / 🚫 away); uses the existing rotation and work-hours logic so the result reflects who would actually handle a ticket right now
+- `/status` command (for registered support persons) — opens an inline keyboard with status options: 🍽 Lunch, ⏸ BRB, 🚫 Away, 🟢 Back; tapping a button sets the status in-place; `/status back` clears it and restores the person's member tag; non-support-persons are rejected with a clear message
+- `person_status` table (migration 008) — one row per support person, stores current status and time set; `ON DELETE CASCADE` on `support_persons`
+- Ticket confirmation shows assignee status if set — if the on-duty person is on lunch/brb/away when a ticket is created, their current status is shown in the confirmation message next to their name
+- When status is set, the bot calls `setChatMemberTag` in all approved groups to update the member tag (e.g. "On lunch", "BRB", "Away"); on `/status back`, the stored label (from `/setlabel`) is restored
 
 
 ## [0.0.39]

@@ -179,8 +179,8 @@ func ParseTimezone(s string) (*time.Location, error) {
 	return time.FixedZone("", offsetSeconds), nil
 }
 
-// IsPersonOnline returns true if the person is currently within their working hours
-// Returns true (always available) if any of the three fields is empty
+// IsPersonOnline returns true if the person is currently within their working hours.
+// Returns true (always available) if any of the three schedule fields is empty.
 func IsPersonOnline(p SupportPerson, now time.Time) bool {
 	// If any working field is empty, person is always available
 	if p.Timezone == "" || p.WorkHours == "" || p.WorkDays == "" {

@@ -100,6 +100,9 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usrc:", tgbot.MatchTypePrefix, h.handleUserClearCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usrp:", tgbot.MatchTypePrefix, h.handleUserPageCallback)
 
+	// status callbacks
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "setstatus:", tgbot.MatchTypePrefix, h.handleStatusCallback)
+
 	// offboard callbacks
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "offbrd_grp:", tgbot.MatchTypePrefix, h.handleOffboardGroupCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "offbrd_all:", tgbot.MatchTypePrefix, h.handleOffboardAllCallback)

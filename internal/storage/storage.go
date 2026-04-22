@@ -40,6 +40,7 @@ type SupportPerson struct {
 	Timezone         string // "+02:00" or ""
 	WorkHours        string // "08:30-18:30" or ""
 	WorkDays         string // "1-5" or ""
+	Status           string // "lunch", "brb", "away", or "" (no override)
 }
 
 type OnDutyResult struct {
@@ -427,9 +428,11 @@ func (d *DB) SetPersonWorkHours(ctx context.Context, telegramUsername, timezone,
 
 func (d *DB) ListSupportPersonsForCategory(ctx context.Context, categoryID int64) ([]SupportPerson, error) {
 	rows, err := d.db.QueryContext(ctx,
-		"SELECT sp.id, sp.name, sp.telegram_username, sp.linear_username, sp.timezone, sp.work_hours, sp.work_days FROM support_persons sp "+
-			"INNER JOIN support_assignments sa ON sp.id = sa.support_person_id "+
-			"WHERE sa.category_id = ? ORDER BY sp.id", categoryID)
+		`SELECT sp.id, sp.name, sp.telegram_username, sp.linear_username, sp.timezone, sp.work_hours, sp.work_days, COALESCE(ps.status, '')
+		 FROM support_persons sp
+		 INNER JOIN support_assignments sa ON sp.id = sa.support_person_id
+		 LEFT JOIN person_status ps ON sp.id = ps.support_person_id
+		 WHERE sa.category_id = ? ORDER BY sp.id`, categoryID)
 	if err != nil {
 		return nil, err
 	}
@@ -438,7 +441,7 @@ func (d *DB) ListSupportPersonsForCategory(ctx context.Context, categoryID int64
 	var persons []SupportPerson
 	for rows.Next() {
 		var sp SupportPerson
-		if err := rows.Scan(&sp.ID, &sp.Name, &sp.TelegramUsername, &sp.LinearUsername, &sp.Timezone, &sp.WorkHours, &sp.WorkDays); err != nil {
+		if err := rows.Scan(&sp.ID, &sp.Name, &sp.TelegramUsername, &sp.LinearUsername, &sp.Timezone, &sp.WorkHours, &sp.WorkDays, &sp.Status); err != nil {
 			return nil, err
 		}
 		persons = append(persons, sp)
@@ -448,7 +451,10 @@ func (d *DB) ListSupportPersonsForCategory(ctx context.Context, categoryID int64
 
 func (d *DB) ListAllSupportPersons(ctx context.Context) ([]SupportPerson, error) {
 	rows, err := d.db.QueryContext(ctx,
-		"SELECT id, name, telegram_username, linear_username, timezone, work_hours, work_days FROM support_persons ORDER BY id")
+		`SELECT sp.id, sp.name, sp.telegram_username, sp.linear_username, sp.timezone, sp.work_hours, sp.work_days, COALESCE(ps.status, '')
+		 FROM support_persons sp
+		 LEFT JOIN person_status ps ON sp.id = ps.support_person_id
+		 ORDER BY sp.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -457,12 +463,43 @@ func (d *DB) ListAllSupportPersons(ctx context.Context) ([]SupportPerson, error)
 	var persons []SupportPerson
 	for rows.Next() {
 		var sp SupportPerson
-		if err := rows.Scan(&sp.ID, &sp.Name, &sp.TelegramUsername, &sp.LinearUsername, &sp.Timezone, &sp.WorkHours, &sp.WorkDays); err != nil {
+		if err := rows.Scan(&sp.ID, &sp.Name, &sp.TelegramUsername, &sp.LinearUsername, &sp.Timezone, &sp.WorkHours, &sp.WorkDays, &sp.Status); err != nil {
 			return nil, err
 		}
 		persons = append(persons, sp)
 	}
 	return persons, rows.Err()
+}
+
+func (d *DB) GetSupportPersonByTelegramUsername(ctx context.Context, username string) (*SupportPerson, error) {
+	var sp SupportPerson
+	err := d.db.QueryRowContext(ctx,
+		`SELECT sp.id, sp.name, sp.telegram_username, sp.linear_username, sp.timezone, sp.work_hours, sp.work_days, COALESCE(ps.status, '')
+		 FROM support_persons sp
+		 LEFT JOIN person_status ps ON sp.id = ps.support_person_id
+		 WHERE sp.telegram_username = ?`,
+		username).Scan(&sp.ID, &sp.Name, &sp.TelegramUsername, &sp.LinearUsername, &sp.Timezone, &sp.WorkHours, &sp.WorkDays, &sp.Status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &sp, nil
+}
+
+func (d *DB) SetPersonStatus(ctx context.Context, personID int64, status string) error {
+	_, err := d.db.ExecContext(ctx,
+		`INSERT INTO person_status (support_person_id, status, set_at)
+		 VALUES (?, ?, datetime('now'))
+		 ON CONFLICT(support_person_id) DO UPDATE SET status = excluded.status, set_at = excluded.set_at`,
+		personID, status)
+	return err
+}
+
+func (d *DB) ClearPersonStatus(ctx context.Context, personID int64) error {
+	_, err := d.db.ExecContext(ctx, "DELETE FROM person_status WHERE support_person_id = ?", personID)
+	return err
 }
 
 // === Assignments & Rotation ===
