@@ -1118,10 +1118,10 @@ func (h *Handler) handleAdminTopicGroupCallback(ctx context.Context, b *tgbot.Bo
 				Text:         "🌐 Global (all topics)",
 				CallbackData: "confirm:global",
 			}})
-			for threadID, topicName := range topics {
+			for _, t := range sortTopics(topics) {
 				rows = append(rows, []models.InlineKeyboardButton{{
-					Text:         "📌 " + topicName,
-					CallbackData: fmt.Sprintf("topic:%d:%d", selectedChatID, threadID),
+					Text:         "📌 " + t.Name,
+					CallbackData: fmt.Sprintf("topic:%d:%d", selectedChatID, t.ThreadID),
 				}})
 			}
 			rows = append(rows, []models.InlineKeyboardButton{{

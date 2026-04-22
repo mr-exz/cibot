@@ -2,7 +2,10 @@
 
 ## [0.0.43]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- Group picker buttons (used in `/addcategory`, `/addtopic`, `/setrotation`, `/addtype`, `/addperson`, `/offboard`, `/setlabel`) now appear in stable alphabetical order — previously the order shuffled on every render due to Go map iteration being non-deterministic
+- Topic picker buttons (used in `/addcategory` topic selection, `/categories` clone and scope flows) now appear in stable alphabetical order for the same reason
+- `/topics` text output now lists groups alphabetically and topics by thread ID within each group
 
 
 ## [0.0.42]

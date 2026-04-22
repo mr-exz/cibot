@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -208,14 +209,23 @@ func (h *Handler) handleListTopics(ctx context.Context, b *tgbot.Bot, msg *model
 		return
 	}
 
+	type groupEntry struct {
+		chatID int64
+		name   string
+	}
+	groupEntries := make([]groupEntry, 0, len(allTopics))
+	for chatID := range allTopics {
+		groupEntries = append(groupEntries, groupEntry{chatID, h.getGroupName(chatID)})
+	}
+	sort.Slice(groupEntries, func(i, j int) bool { return groupEntries[i].name < groupEntries[j].name })
+
 	var sb strings.Builder
 	sb.WriteString("📋 Registered Topics:\n")
 
-	for chatID, topics := range allTopics {
-		groupName := h.getGroupName(chatID)
-		sb.WriteString(fmt.Sprintf("\n%s (chat_id: %d):\n", groupName, chatID))
-		for threadID, topicName := range topics {
-			sb.WriteString(fmt.Sprintf("  🔹 thread %d — %s\n", threadID, topicName))
+	for _, g := range groupEntries {
+		sb.WriteString(fmt.Sprintf("\n%s (chat_id: %d):\n", g.name, g.chatID))
+		for _, t := range sortTopics(allTopics[g.chatID]) {
+			sb.WriteString(fmt.Sprintf("  🔹 thread %d — %s\n", t.ThreadID, t.Name))
 		}
 	}
 

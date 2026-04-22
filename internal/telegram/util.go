@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -278,16 +279,40 @@ func buildTopicConfirmKeyboard() *models.InlineKeyboardMarkup {
 	}
 }
 
-// buildGroupKeyboard creates a keyboard for group selection in the /addtopic flow
+// topicEntry is a sorted topic map entry.
+type topicEntry struct {
+	ThreadID int
+	Name     string
+}
+
+// sortTopics converts a threadID→name map into a slice sorted by name.
+func sortTopics(topics map[int]string) []topicEntry {
+	entries := make([]topicEntry, 0, len(topics))
+	for threadID, name := range topics {
+		entries = append(entries, topicEntry{threadID, name})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	return entries
+}
+
+// buildGroupKeyboard creates a keyboard for group selection, sorted by group name.
 func buildGroupKeyboard(groups map[int64]string) *models.InlineKeyboardMarkup {
-	rows := make([][]models.InlineKeyboardButton, 0, len(groups))
+	type groupEntry struct {
+		chatID int64
+		name   string
+	}
+	entries := make([]groupEntry, 0, len(groups))
 	for chatID, name := range groups {
-		rows = append(rows, []models.InlineKeyboardButton{
-			{
-				Text:         name,
-				CallbackData: fmt.Sprintf("grp:%d", chatID),
-			},
-		})
+		entries = append(entries, groupEntry{chatID, name})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].name < entries[j].name })
+
+	rows := make([][]models.InlineKeyboardButton, 0, len(entries))
+	for _, e := range entries {
+		rows = append(rows, []models.InlineKeyboardButton{{
+			Text:         e.name,
+			CallbackData: fmt.Sprintf("grp:%d", e.chatID),
+		}})
 	}
 	return &models.InlineKeyboardMarkup{InlineKeyboard: rows}
 }

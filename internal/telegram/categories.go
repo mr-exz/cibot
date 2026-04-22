@@ -418,10 +418,10 @@ func (h *Handler) showCloneTopicPicker(ctx context.Context, b *tgbot.Bot, chatID
 			CallbackData: fmt.Sprintf("catmgr:clonetopic:%d:%d:0", catID, targetChatID),
 		}},
 	}
-	for threadID, topicName := range topics {
+	for _, t := range sortTopics(topics) {
 		rows = append(rows, []models.InlineKeyboardButton{{
-			Text:         "📌 " + topicName,
-			CallbackData: fmt.Sprintf("catmgr:clonetopic:%d:%d:%d", catID, targetChatID, threadID),
+			Text:         "📌 " + t.Name,
+			CallbackData: fmt.Sprintf("catmgr:clonetopic:%d:%d:%d", catID, targetChatID, t.ThreadID),
 		}})
 	}
 	rows = append(rows, []models.InlineKeyboardButton{{
@@ -507,10 +507,10 @@ func (h *Handler) showTopicPickerForCatMgr(ctx context.Context, b *tgbot.Bot, ch
 	topics := h.getTopics(targetChatID)
 
 	rows := make([][]models.InlineKeyboardButton, 0)
-	for threadID, topicName := range topics {
+	for _, t := range sortTopics(topics) {
 		rows = append(rows, []models.InlineKeyboardButton{{
-			Text:         "📌 " + topicName,
-			CallbackData: fmt.Sprintf("catmgr:settopic:%d:%d:%d", catID, targetChatID, threadID),
+			Text:         "📌 " + t.Name,
+			CallbackData: fmt.Sprintf("catmgr:settopic:%d:%d:%d", catID, targetChatID, t.ThreadID),
 		}})
 	}
 	if len(rows) == 0 {
