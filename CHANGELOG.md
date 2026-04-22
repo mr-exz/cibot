@@ -2,7 +2,8 @@
 
 ## [0.0.41]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- `/status back` now clears the member tag in all approved groups (calls `setChatMemberTag` with empty string) instead of restoring a stale label from the unused `user_labels` table
 
 
 ## [0.0.40]

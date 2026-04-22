@@ -120,24 +120,21 @@ func (h *Handler) handleStatusCallback(ctx context.Context, b *tgbot.Bot, update
 		return
 	}
 
-	var tag, reply string
+	var reply string
 
 	if status == "back" {
 		if err := h.storage.ClearPersonStatus(ctx, person.ID); err != nil {
 			log.Printf("❌ ClearPersonStatus for person %d: %v", person.ID, err)
 		}
-		label, _ := h.storage.GetUserLabel(ctx, query.From.Username)
-		tag = label
+		h.setTagInAllGroups(ctx, query.From.ID, query.From.Username, "")
 		reply = "You are back on duty."
 	} else {
 		if err := h.storage.SetPersonStatus(ctx, person.ID, status); err != nil {
 			log.Printf("❌ SetPersonStatus for person %d: %v", person.ID, err)
 		}
-		tag = statusTag(status)
+		h.setTagInAllGroups(ctx, query.From.ID, query.From.Username, statusTag(status))
 		reply = "Status set to: " + statusTag(status) + ". Use /status back when you return."
 	}
-
-	h.setTagInAllGroups(ctx, query.From.ID, query.From.Username, tag)
 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    query.Message.Message.Chat.ID,
