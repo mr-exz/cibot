@@ -2,7 +2,12 @@
 
 ## [0.0.46]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/persons` admin command — lists all support persons; tap a person to view their schedule, see which categories they are assigned to, remove them from individual categories, or delete them entirely; delete requires a confirmation step
+
+### Fixed
+- `/addperson` and `/setworkhours` — schedule picker buttons (timezone, hours, days) now correctly show values entered in previous sessions; previously `INSERT OR IGNORE` silently discarded new timezone/work_hours/work_days when the person already existed in the DB, so those values never reached `GetSupportPersonDefaults` and the picker appeared stuck on old values; changed to `INSERT … ON CONFLICT DO UPDATE` that applies non-empty schedule fields even for existing persons
+- `/oncall` — offline indicator now includes the person's timezone next to their work hours (e.g. `offline 🔴 (hours: 09:00-18:00 +05:00)`) so it is clear which timezone the schedule applies to; falls back to `UTC` when no timezone is set
 
 
 ## [0.0.45]

@@ -94,7 +94,8 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 
 - `/addcategory` — Create a support category (group → topic → name → emoji → Linear team key)
 - `/addtype` — Add a request type to a category; reuse existing types or create new ones
-- `/addperson` — Add a support person (Telegram username → Linear username → timezone → work hours → work days); picker keyboards populated from existing DB values
+- `/addperson` — Add a support person (Telegram username → Linear username → timezone → work hours → work days)
+- `/persons` — List all support persons; tap to view schedule, remove from individual categories, or delete (with confirmation) (Telegram username → Linear username → timezone → work hours → work days); picker keyboards populated from existing DB values
 - `/setrotation` — Set rotation period (daily/weekly) for a category
 - `/setworkhours` — Update timezone and work schedule for a support person; same picker keyboards as `/addperson`
 - `/rotation` — Show current on-duty assignments

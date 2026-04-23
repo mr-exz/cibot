@@ -410,10 +410,15 @@ func (d *DB) AddSupportPerson(ctx context.Context, name, telegramUsername, linea
 }
 
 func (d *DB) AddSupportPersonFull(ctx context.Context, name, telegramUsername, linearUsername, timezone, workHours, workDays string) (int64, error) {
-	// INSERT OR IGNORE so adding the same person to a second category reuses the existing record.
-	// LastInsertId is unreliable after INSERT OR IGNORE, so always SELECT afterwards.
-	_, err := d.db.ExecContext(ctx,
-		"INSERT OR IGNORE INTO support_persons (name, telegram_username, linear_username, timezone, work_hours, work_days) VALUES (?, ?, ?, ?, ?, ?)",
+	// Upsert: insert new person, or on conflict update schedule fields if non-empty values were provided.
+	// INSERT OR IGNORE would silently discard timezone/hours/days for existing persons.
+	_, err := d.db.ExecContext(ctx, `
+		INSERT INTO support_persons (name, telegram_username, linear_username, timezone, work_hours, work_days)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT (telegram_username) DO UPDATE SET
+			timezone   = CASE WHEN excluded.timezone   != '' THEN excluded.timezone   ELSE timezone   END,
+			work_hours = CASE WHEN excluded.work_hours != '' THEN excluded.work_hours ELSE work_hours END,
+			work_days  = CASE WHEN excluded.work_days  != '' THEN excluded.work_days  ELSE work_days  END`,
 		name, telegramUsername, linearUsername, timezone, workHours, workDays)
 	if err != nil {
 		return 0, err
@@ -533,6 +538,40 @@ func (d *DB) SetPersonStatus(ctx context.Context, personID int64, status string)
 
 func (d *DB) ClearPersonStatus(ctx context.Context, personID int64) error {
 	_, err := d.db.ExecContext(ctx, "DELETE FROM person_status WHERE support_person_id = ?", personID)
+	return err
+}
+
+func (d *DB) ListCategoriesForPerson(ctx context.Context, personID int64) ([]Category, error) {
+	rows, err := d.db.QueryContext(ctx,
+		`SELECT c.id, c.name, c.emoji, c.linear_team_key, c.chat_id, c.thread_id
+		 FROM categories c
+		 INNER JOIN support_assignments sa ON c.id = sa.category_id
+		 WHERE sa.support_person_id = ?
+		 ORDER BY c.name`, personID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var cats []Category
+	for rows.Next() {
+		var c Category
+		if err := rows.Scan(&c.ID, &c.Name, &c.Emoji, &c.LinearTeamKey, &c.ChatID, &c.ThreadID); err != nil {
+			return nil, err
+		}
+		cats = append(cats, c)
+	}
+	return cats, rows.Err()
+}
+
+func (d *DB) RemovePersonFromCategory(ctx context.Context, personID, categoryID int64) error {
+	_, err := d.db.ExecContext(ctx,
+		"DELETE FROM support_assignments WHERE support_person_id = ? AND category_id = ?",
+		personID, categoryID)
+	return err
+}
+
+func (d *DB) DeleteSupportPerson(ctx context.Context, personID int64) error {
+	_, err := d.db.ExecContext(ctx, "DELETE FROM support_persons WHERE id = ?", personID)
 	return err
 }
 

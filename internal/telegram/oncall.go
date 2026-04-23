@@ -49,7 +49,11 @@ func (h *Handler) handleOnCall(ctx context.Context, b *tgbot.Bot, msg *models.Me
 		} else if result.Online {
 			line += "available " + indicator
 		} else if person.WorkHours != "" {
-			line += "offline " + indicator + " (hours: " + person.WorkHours + ")"
+			tz := person.Timezone
+			if tz == "" {
+				tz = "UTC"
+			}
+			line += "offline " + indicator + " (hours: " + person.WorkHours + " " + tz + ")"
 		} else {
 			line += "offline " + indicator
 		}
