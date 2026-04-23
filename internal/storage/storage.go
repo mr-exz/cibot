@@ -54,6 +54,14 @@ type CategoryDuty struct {
 	Online   bool
 }
 
+type CategoryRotation struct {
+	Category     Category
+	RotationType string
+	OnDuty       *SupportPerson
+	Online       bool
+	AllPersons   []SupportPerson
+}
+
 type DB struct {
 	db *sql.DB
 }
@@ -664,6 +672,36 @@ func (d *DB) ListAllOnDuty(ctx context.Context, today time.Time) ([]CategoryDuty
 	}
 
 	return duties, nil
+}
+
+func (d *DB) ListAllRotations(ctx context.Context, now time.Time) ([]CategoryRotation, error) {
+	categories, err := d.ListCategories(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var result []CategoryRotation
+	for _, cat := range categories {
+		persons, err := d.ListSupportPersonsForCategory(ctx, cat.ID)
+		if err != nil || len(persons) == 0 {
+			continue
+		}
+		var rotationType string
+		d.db.QueryRowContext(ctx,
+			"SELECT rotation_type FROM support_assignments WHERE category_id = ? ORDER BY id DESC LIMIT 1",
+			cat.ID).Scan(&rotationType)
+		onDuty, err := d.GetOnDutyPersonResult(ctx, cat.ID, now)
+		if err != nil {
+			continue
+		}
+		result = append(result, CategoryRotation{
+			Category:     cat,
+			RotationType: rotationType,
+			OnDuty:       onDuty.Person,
+			Online:       onDuty.Online,
+			AllPersons:   persons,
+		})
+	}
+	return result, nil
 }
 
 // === Group Chats ===

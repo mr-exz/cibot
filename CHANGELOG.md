@@ -2,7 +2,9 @@
 
 ## [0.0.48]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/rotation` now shows full rotation details for every category: group/topic scope, rotation type (daily/weekly), on-duty person with Linear username, work hours, and timezone, and the full team list with each person's current availability indicator; on-duty person is marked in the team list
+- `/rotation` team list is now always shown regardless of team size — previously hidden when only one person was assigned
 
 
 ## [0.0.47]

@@ -11,6 +11,7 @@ import (
 
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+	"github.com/mr-exz/cibot/internal/storage"
 )
 
 // handleSetLabelForward is triggered when an admin forwards a user message to the bot in DM.
@@ -528,36 +529,85 @@ func min(a, b int) int {
 	return b
 }
 
-// handleRotation shows current on-duty support persons for all categories
+// handleRotation shows the full rotation overview for all categories.
 func (h *Handler) handleRotation(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
-	duties, err := h.storage.ListAllOnDuty(ctx, time.Now())
+	now := time.Now()
+	rotations, err := h.storage.ListAllRotations(ctx, now)
 	if err != nil {
 		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to get rotation: %v", err))
 		return
 	}
-
-	if len(duties) == 0 {
-		h.sendMessage(ctx, b, msg, "No categories with assigned support persons")
+	if len(rotations) == 0 {
+		h.sendMessage(ctx, b, msg, "No categories with assigned support persons.")
 		return
 	}
 
-	var response string
-	response = "📋 Current On-Duty Support\n\n"
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Rotation overview — %s\n", now.Format("Mon 2 Jan")))
 
-	for _, duty := range duties {
-		status := "🟢"
-		if !duty.Online {
-			status = "🔴"
+	for _, r := range rotations {
+		sb.WriteString("\n")
+
+		// Scope header
+		cat := r.Category
+		if cat.ChatID == nil {
+			sb.WriteString("[Global]\n")
+		} else {
+			groupName := h.getGroupName(*cat.ChatID)
+			if cat.ThreadID != nil {
+				topics := h.getTopics(*cat.ChatID)
+				topicName := topics[*cat.ThreadID]
+				if topicName == "" {
+					topicName = fmt.Sprintf("thread %d", *cat.ThreadID)
+				}
+				sb.WriteString(fmt.Sprintf("[%s / %s]\n", groupName, topicName))
+			} else {
+				sb.WriteString(fmt.Sprintf("[%s]\n", groupName))
+			}
 		}
-		response += fmt.Sprintf("%s %s → %s %s\n  🔵 @%s | 🔷 @%s\n\n",
-			duty.Category.Emoji,
-			duty.Category.Name,
-			duty.Person.Name,
-			status,
-			duty.Person.TelegramUsername,
-			duty.Person.LinearUsername,
-		)
+
+		// Category + rotation type
+		sb.WriteString(fmt.Sprintf("  %s %s (%s)\n", cat.Emoji, cat.Name, r.RotationType))
+
+		// On-duty person
+		p := r.OnDuty
+		dutyIndicator := personIndicator(p, r.Online, now)
+		sb.WriteString(fmt.Sprintf("  On duty: %s (@%s) %s\n", p.Name, p.TelegramUsername, dutyIndicator))
+		sb.WriteString(fmt.Sprintf("  Linear: @%s\n", p.LinearUsername))
+
+		tz := p.Timezone
+		if tz == "" {
+			tz = "UTC"
+		}
+		if p.WorkHours != "" {
+			sb.WriteString(fmt.Sprintf("  Hours: %s %s | Days: %s\n", p.WorkHours, tz, p.WorkDays))
+		}
+
+		// Full team
+		sb.WriteString("  Team:\n")
+		for i, tp := range r.AllPersons {
+			ind := personIndicator(&tp, isPersonOnlineNow(&tp, now), now)
+			marker := ""
+			if tp.ID == p.ID {
+				marker = " <- on duty"
+			}
+			sb.WriteString(fmt.Sprintf("    %d. %s (@%s) %s%s\n", i+1, tp.Name, tp.TelegramUsername, ind, marker))
+		}
 	}
 
-	h.sendMessage(ctx, b, msg, response)
+	h.sendMessage(ctx, b, msg, strings.TrimRight(sb.String(), "\n"))
+}
+
+func personIndicator(p *storage.SupportPerson, online bool, now time.Time) string {
+	if p.Status != "" {
+		return statusEmoji(p.Status)
+	}
+	if online {
+		return "🟢"
+	}
+	return "🔴"
+}
+
+func isPersonOnlineNow(p *storage.SupportPerson, now time.Time) bool {
+	return storage.IsPersonOnline(*p, now)
 }
