@@ -23,26 +23,23 @@ func (h *Handler) showPersonsList(ctx context.Context, b *tgbot.Bot, chatID int6
 		return
 	}
 
-	if len(persons) == 0 {
-		text := "No support persons registered yet."
-		if messageID != 0 {
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{ChatID: chatID, MessageID: messageID, Text: text})
-		} else {
-			b.SendMessage(ctx, &tgbot.SendMessageParams{ChatID: chatID, Text: text})
-		}
-		return
-	}
-
-	rows := make([][]models.InlineKeyboardButton, 0, len(persons))
+	rows := make([][]models.InlineKeyboardButton, 0, len(persons)+1)
 	for _, p := range persons {
 		rows = append(rows, []models.InlineKeyboardButton{{
 			Text:         fmt.Sprintf("%s (@%s)", p.Name, p.TelegramUsername),
 			CallbackData: fmt.Sprintf("pmgr:view:%d", p.ID),
 		}})
 	}
+	rows = append(rows, []models.InlineKeyboardButton{{
+		Text:         "➕ Add person",
+		CallbackData: "pmgr:addperson",
+	}})
 	kb := &models.InlineKeyboardMarkup{InlineKeyboard: rows}
 
 	text := "Support persons:"
+	if len(persons) == 0 {
+		text = "No support persons yet."
+	}
 	if messageID != 0 {
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:      chatID,
@@ -117,7 +114,7 @@ func (h *Handler) showPersonDetail(ctx context.Context, b *tgbot.Bot, chatID int
 		}
 	}
 
-	rows := make([][]models.InlineKeyboardButton, 0, len(cats)+2)
+	rows := make([][]models.InlineKeyboardButton, 0, len(cats)+4)
 	for _, c := range cats {
 		rows = append(rows, []models.InlineKeyboardButton{{
 			Text:         fmt.Sprintf("🚫 Remove from %s %s", c.Emoji, c.Name),
@@ -125,6 +122,14 @@ func (h *Handler) showPersonDetail(ctx context.Context, b *tgbot.Bot, chatID int
 		}})
 	}
 	rows = append(rows,
+		[]models.InlineKeyboardButton{{
+			Text:         "➕ Add to category",
+			CallbackData: fmt.Sprintf("pmgr:addtocat:%d", personID),
+		}},
+		[]models.InlineKeyboardButton{{
+			Text:         "✏️ Edit schedule",
+			CallbackData: fmt.Sprintf("pmgr:editsch:%d", personID),
+		}},
 		[]models.InlineKeyboardButton{{
 			Text:         "🗑 Delete person",
 			CallbackData: fmt.Sprintf("pmgr:del:%d", personID),
@@ -150,6 +155,7 @@ func (h *Handler) handlePersonsCallback(ctx context.Context, b *tgbot.Bot, updat
 	data := strings.TrimPrefix(query.Data, "pmgr:")
 	chatID := query.Message.Message.Chat.ID
 	messageID := query.Message.Message.ID
+	userID := query.From.ID
 
 	switch {
 	case data == "list":
@@ -161,6 +167,60 @@ func (h *Handler) handlePersonsCallback(ctx context.Context, b *tgbot.Bot, updat
 			return
 		}
 		h.showPersonDetail(ctx, b, chatID, messageID, personID)
+
+	case data == "addperson":
+		h.startAdminCategoryPickerInline(ctx, b, &pendingAdminSession{
+			Cmd:       AdminCmdAddPerson,
+			ChatID:    chatID,
+			MessageID: messageID,
+			UserID:    userID,
+		})
+
+	case strings.HasPrefix(data, "addtocat:"):
+		personID, err := strconv.ParseInt(strings.TrimPrefix(data, "addtocat:"), 10, 64)
+		if err != nil {
+			return
+		}
+		h.startAdminCategoryPickerInline(ctx, b, &pendingAdminSession{
+			Cmd:       AdminCmdAddPersonToCategory,
+			ChatID:    chatID,
+			MessageID: messageID,
+			UserID:    userID,
+			PersonID:  personID,
+		})
+
+	case strings.HasPrefix(data, "editsch:"):
+		personID, err := strconv.ParseInt(strings.TrimPrefix(data, "editsch:"), 10, 64)
+		if err != nil {
+			return
+		}
+		persons, _ := h.storage.ListAllSupportPersons(ctx)
+		var person *storage.SupportPerson
+		for i := range persons {
+			if persons[i].ID == personID {
+				person = &persons[i]
+				break
+			}
+		}
+		if person == nil {
+			return
+		}
+		admin := &pendingAdminSession{
+			Cmd:       AdminCmdSetWorkHours,
+			Step:      StepAdminWhTimezone,
+			ChatID:    chatID,
+			MessageID: messageID,
+			UserID:    userID,
+			PersonID:  personID,
+			TgUsername: person.TelegramUsername,
+			Timezone:  person.Timezone,
+			WorkHours: person.WorkHours,
+			WorkDays:  person.WorkDays,
+		}
+		h.mu.Lock()
+		h.states[stateKey{UserID: userID}] = admin
+		h.mu.Unlock()
+		h.showTzPicker(ctx, b, admin, true)
 
 	case strings.HasPrefix(data, "rmcat:"):
 		parts := strings.SplitN(strings.TrimPrefix(data, "rmcat:"), ":", 2)

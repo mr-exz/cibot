@@ -24,8 +24,9 @@ const (
 	AdminCmdAddTopic      AdminCmd = "addtopic"
 	AdminCmdSetLabel      AdminCmd = "setlabel"
 	AdminCmdCloneCategory AdminCmd = "clonecategory"
-	AdminCmdOffboard      AdminCmd = "offboard"
-	AdminCmdDNS           AdminCmd = "dns"
+	AdminCmdOffboard             AdminCmd = "offboard"
+	AdminCmdDNS                  AdminCmd = "dns"
+	AdminCmdAddPersonToCategory  AdminCmd = "addpersontocategory"
 )
 
 // Step constants for the multi-step issue creation flow

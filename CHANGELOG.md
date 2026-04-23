@@ -2,7 +2,15 @@
 
 ## [0.0.47]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/persons` now contains all person management in one place:
+  - **Add person** — "➕ Add person" button at the bottom of the list starts the full add-person flow (category → name → Telegram → Linear → schedule) inline, without a separate command
+  - **Add to category** — "➕ Add to category" on a person detail screen shows the category picker and creates a new assignment for that person directly, without re-entering their details
+  - **Edit schedule** — "✏️ Edit schedule" on a person detail screen opens the timezone/hours/days pickers pre-filled with the person's current values; Skip preserves the existing value
+
+### Removed
+- `/addperson` command — functionality moved into `/persons` (Add person button)
+- `/setworkhours` command — functionality moved into `/persons` person detail screen (Edit schedule button)
 
 
 ## [0.0.46]

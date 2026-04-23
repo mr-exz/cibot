@@ -80,25 +80,11 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler:   h.handleAddType,
 		},
 		{
-			Name:      "addperson",
-			Desc:      "Add a support person",
-			Group:     "Admin",
-			AdminOnly: true,
-			Handler:   h.handleAddPerson,
-		},
-		{
 			Name:      "setrotation",
 			Desc:      "Set on-call rotation for a category",
 			Group:     "Admin",
 			AdminOnly: true,
 			Handler:   h.handleSetRotation,
-		},
-		{
-			Name:      "setworkhours",
-			Desc:      "Set work hours for a support person",
-			Group:     "Admin",
-			AdminOnly: true,
-			Handler:   h.handleSetWorkHours,
 		},
 		{
 			Name:      "rotation",

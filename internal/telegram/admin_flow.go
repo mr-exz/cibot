@@ -720,6 +720,23 @@ func (h *Handler) handleAdminCategoryCallback(ctx context.Context, b *tgbot.Bot,
 			Text:        fmt.Sprintf("✓ Category: %s %s\n\n📅 Select rotation type:", cat.Emoji, cat.Name),
 			ReplyMarkup: keyboard,
 		})
+
+	case AdminCmdAddPersonToCategory:
+		// Assign existing person (admin.PersonID) to the selected category directly.
+		startDate := time.Now().Format("2006-01-02")
+		if err := h.storage.CreateInitialAssignment(ctx, cat.ID, admin.PersonID, "daily", startDate); err != nil {
+			log.Printf("❌ AddPersonToCategory CreateInitialAssignment: %v", err)
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:    admin.ChatID,
+				MessageID: admin.MessageID,
+				Text:      fmt.Sprintf("❌ Failed to add to category: %v", err),
+			})
+		} else {
+			h.mu.Lock()
+			delete(h.states, stateKey{UserID: admin.UserID})
+			h.mu.Unlock()
+			h.showPersonDetail(ctx, b, admin.ChatID, admin.MessageID, admin.PersonID)
+		}
 	}
 }
 
@@ -761,6 +778,37 @@ func (h *Handler) startAdminCategoryPicker(ctx context.Context, b *tgbot.Bot, ms
 	}
 	h.mu.Unlock()
 	log.Printf("✓ Started /%s flow for %s", cmd, msg.From.Username)
+}
+
+// startAdminCategoryPickerInline starts a category-picker flow by editing an existing message.
+// Used when the flow is triggered from an inline keyboard (e.g. from /persons) rather than a command.
+// extraSession fields (e.g. PersonID) can be pre-populated by the caller before passing.
+func (h *Handler) startAdminCategoryPickerInline(ctx context.Context, b *tgbot.Bot, session *pendingAdminSession) {
+	categories, err := h.storage.ListCategories(ctx)
+	if err != nil || len(categories) == 0 {
+		msg := "❌ No categories yet. Create one with /addcategory"
+		if err != nil {
+			msg = fmt.Sprintf("❌ Failed to load categories: %v", err)
+		}
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    session.ChatID,
+			MessageID: session.MessageID,
+			Text:      msg,
+		})
+		return
+	}
+	keyboard := h.buildAdminCatTopKeyboard(categories)
+	session.Step = StepCategory
+	session.CreatedAt = time.Now()
+	h.mu.Lock()
+	h.states[stateKey{UserID: session.UserID}] = session
+	h.mu.Unlock()
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      session.ChatID,
+		MessageID:   session.MessageID,
+		Text:        "🗂️ Select category:",
+		ReplyMarkup: keyboard,
+	})
 }
 
 // buildAdminCatTopKeyboard builds the top-level category picker:

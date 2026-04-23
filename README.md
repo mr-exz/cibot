@@ -94,10 +94,8 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 
 - `/addcategory` — Create a support category (group → topic → name → emoji → Linear team key)
 - `/addtype` — Add a request type to a category; reuse existing types or create new ones
-- `/addperson` — Add a support person (Telegram username → Linear username → timezone → work hours → work days)
-- `/persons` — List all support persons; tap to view schedule, remove from individual categories, or delete (with confirmation) (Telegram username → Linear username → timezone → work hours → work days); picker keyboards populated from existing DB values
+- `/persons` — Manage all support persons: list everyone, add a new person, view schedule, add to a category, edit schedule (pickers pre-filled from DB), remove from categories, or delete (with confirmation)
 - `/setrotation` — Set rotation period (daily/weekly) for a category
-- `/setworkhours` — Update timezone and work schedule for a support person; same picker keyboards as `/addperson`
 - `/rotation` — Show current on-duty assignments
 - `/groups` — List all known groups with approve/disapprove buttons *(DM only)*
 - `/categories` — Manage category scopes (global / group-level / topic-level) and delete categories; clone a category to another group/topic
@@ -131,5 +129,5 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
    - Change Group Info, Delete Messages, Ban Users, Add Members, Pin Messages, Manage Topics, Manage Video Chats
    - **Manage Tags** — required for `/setlabel` (set member tags via Bot API 9.5)
 6. DM the bot with `/groups` to approve the groups where it should operate
-7. Use `/addtopic`, `/addcategory`, `/addtype`, `/addperson` to configure support (all via DM or group)
+7. Use `/addtopic`, `/addcategory`, `/addtype`, `/persons` to configure support (all via DM or group)
 8. Users can now use `/ticket` to create issues; `/oncall` to see who is on duty
