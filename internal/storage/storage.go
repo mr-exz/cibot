@@ -476,6 +476,35 @@ func (d *DB) ListAllSupportPersons(ctx context.Context) ([]SupportPerson, error)
 	return persons, rows.Err()
 }
 
+// GetSupportPersonDefaults returns distinct non-empty timezone, work_hours, and work_days
+// values already stored across all support persons, for use as quick-pick suggestions.
+func (d *DB) GetSupportPersonDefaults(ctx context.Context) (tzs, hours, days []string, err error) {
+	scan := func(query string) ([]string, error) {
+		rows, e := d.db.QueryContext(ctx, query)
+		if e != nil {
+			return nil, e
+		}
+		defer rows.Close()
+		var out []string
+		for rows.Next() {
+			var v string
+			if e := rows.Scan(&v); e != nil {
+				return nil, e
+			}
+			out = append(out, v)
+		}
+		return out, rows.Err()
+	}
+	if tzs, err = scan("SELECT DISTINCT timezone FROM support_persons WHERE timezone != '' ORDER BY timezone"); err != nil {
+		return
+	}
+	if hours, err = scan("SELECT DISTINCT work_hours FROM support_persons WHERE work_hours != '' ORDER BY work_hours"); err != nil {
+		return
+	}
+	days, err = scan("SELECT DISTINCT work_days FROM support_persons WHERE work_days != '' ORDER BY work_days")
+	return
+}
+
 func (d *DB) GetSupportPersonByTelegramUsername(ctx context.Context, username string) (*SupportPerson, error) {
 	var sp SupportPerson
 	err := d.db.QueryRowContext(ctx,

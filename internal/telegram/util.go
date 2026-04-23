@@ -241,6 +241,32 @@ func buildRotationTypeKeyboard() *models.InlineKeyboardMarkup {
 	}
 }
 
+// buildPickerKeyboard builds a two-column inline keyboard from a list of string values.
+// Each button's label and callback data are the value itself, prefixed by callbackPrefix.
+// An optional Skip button is appended when canSkip is true.
+func buildPickerKeyboard(values []string, callbackPrefix string, canSkip bool) *models.InlineKeyboardMarkup {
+	rows := make([][]models.InlineKeyboardButton, 0, len(values)/2+2)
+	for i := 0; i < len(values); i += 2 {
+		row := []models.InlineKeyboardButton{{
+			Text:         values[i],
+			CallbackData: callbackPrefix + values[i],
+		}}
+		if i+1 < len(values) {
+			row = append(row, models.InlineKeyboardButton{
+				Text:         values[i+1],
+				CallbackData: callbackPrefix + values[i+1],
+			})
+		}
+		rows = append(rows, row)
+	}
+	if canSkip {
+		rows = append(rows, []models.InlineKeyboardButton{{
+			Text: "⏭ Skip", CallbackData: callbackPrefix + "skip",
+		}})
+	}
+	return &models.InlineKeyboardMarkup{InlineKeyboard: rows}
+}
+
 // buildSkipKeyboard creates a keyboard with a single Skip button
 func buildSkipKeyboard() *models.InlineKeyboardMarkup {
 	return &models.InlineKeyboardMarkup{

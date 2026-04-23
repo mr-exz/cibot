@@ -2,7 +2,10 @@
 
 ## [0.0.45]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/addperson` timezone, work hours, and work days steps now show inline picker keyboards populated with values already in use across all support persons in the DB, so admins can reuse existing schedules without typing; manual text entry still works as a fallback; timezone and hours steps have a Skip button (inherits previous value), days step does not
+- `/setworkhours` same picker keyboard improvement — after selecting a person, timezone/hours/days steps show the same pickers
+- Day picker always includes three preset buttons (1-5, 1-6, 1-7) in addition to any custom values from DB
 
 
 ## [0.0.44]

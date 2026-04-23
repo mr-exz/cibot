@@ -100,6 +100,9 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usrc:", tgbot.MatchTypePrefix, h.handleUserClearCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "usrp:", tgbot.MatchTypePrefix, h.handleUserPageCallback)
 
+	// schedule picker callbacks (/addperson and /setworkhours)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "ppick:", tgbot.MatchTypePrefix, h.handlePersonPickCallback)
+
 	// status callbacks
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "setstatus:", tgbot.MatchTypePrefix, h.handleStatusCallback)
 

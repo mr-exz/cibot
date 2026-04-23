@@ -271,6 +271,288 @@ func (h *Handler) handleAdminAddTypePending(ctx context.Context, b *tgbot.Bot, m
 	}
 }
 
+// ===== schedule pickers (shared by /addperson and /setworkhours) =====
+
+// dayPresets are always offered in the days picker regardless of DB contents.
+var dayPresets = []string{"1-5", "1-6", "1-7"}
+
+func (h *Handler) showTzPicker(ctx context.Context, b *tgbot.Bot, admin *pendingAdminSession, canSkip bool) {
+	tzs, _, _, _ := h.storage.GetSupportPersonDefaults(ctx)
+	kb := buildPickerKeyboard(tzs, "ppick:tz:", canSkip)
+	prompt := "Select timezone or type your own (e.g. +02:00):"
+	if !canSkip {
+		prompt = "Enter timezone (e.g. +02:00) or select existing:"
+	}
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      admin.ChatID,
+		MessageID:   admin.MessageID,
+		Text:        "🌍 " + prompt,
+		ReplyMarkup: kb,
+	})
+}
+
+func (h *Handler) showHoursPicker(ctx context.Context, b *tgbot.Bot, admin *pendingAdminSession, canSkip bool) {
+	_, hours, _, _ := h.storage.GetSupportPersonDefaults(ctx)
+	tzDisplay := admin.Timezone
+	if tzDisplay == "" {
+		tzDisplay = "(skipped)"
+	}
+	kb := buildPickerKeyboard(hours, "ppick:hrs:", canSkip)
+	prompt := "Select work hours or type your own (e.g. 09:00-18:00):"
+	if !canSkip {
+		prompt = "Enter work hours (e.g. 09:00-18:00) or select existing:"
+	}
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      admin.ChatID,
+		MessageID:   admin.MessageID,
+		Text:        fmt.Sprintf("✓ Timezone: %s\n\n⏰ %s", tzDisplay, prompt),
+		ReplyMarkup: kb,
+	})
+}
+
+func (h *Handler) showDaysPicker(ctx context.Context, b *tgbot.Bot, admin *pendingAdminSession, canSkip bool) {
+	_, _, dbDays, _ := h.storage.GetSupportPersonDefaults(ctx)
+	// merge presets with DB values, preserving order and deduplicating
+	seen := make(map[string]bool)
+	merged := make([]string, 0, len(dayPresets)+len(dbDays))
+	for _, v := range append(dayPresets, dbDays...) {
+		if !seen[v] {
+			seen[v] = true
+			merged = append(merged, v)
+		}
+	}
+	hoursDisplay := admin.WorkHours
+	if hoursDisplay == "" {
+		hoursDisplay = "(skipped)"
+	}
+	kb := buildPickerKeyboard(merged, "ppick:days:", canSkip)
+	prompt := "Select work days or type your own (e.g. 1-5):"
+	if !canSkip {
+		prompt = "Enter work days (e.g. 1-5) or select existing:"
+	}
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      admin.ChatID,
+		MessageID:   admin.MessageID,
+		Text:        fmt.Sprintf("✓ Work hours: %s\n\n📅 %s", hoursDisplay, prompt),
+		ReplyMarkup: kb,
+	})
+}
+
+func (h *Handler) finalizeAddPerson(ctx context.Context, b *tgbot.Bot, admin *pendingAdminSession, userID int64) {
+	if admin.WorkHours != "" {
+		if _, _, err := storage.ParseWorkHours(admin.WorkHours); err != nil {
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:    admin.ChatID,
+				MessageID: admin.MessageID,
+				Text:      fmt.Sprintf("❌ Invalid work hours format: %v", err),
+			})
+			return
+		}
+	}
+	if admin.WorkDays != "" {
+		if _, err := storage.ParseWorkDays(admin.WorkDays); err != nil {
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:    admin.ChatID,
+				MessageID: admin.MessageID,
+				Text:      fmt.Sprintf("❌ Invalid work days format: %v", err),
+			})
+			return
+		}
+	}
+	if admin.Timezone != "" {
+		if _, err := storage.ParseTimezone(admin.Timezone); err != nil {
+			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+				ChatID:    admin.ChatID,
+				MessageID: admin.MessageID,
+				Text:      fmt.Sprintf("❌ Invalid timezone format: %v", err),
+			})
+			return
+		}
+	}
+
+	personID, err := h.storage.AddSupportPersonFull(ctx, admin.PersonName, admin.TgUsername, admin.LinearUsername, admin.Timezone, admin.WorkHours, admin.WorkDays)
+	if err != nil {
+		log.Printf("❌ Failed to add support person: %v", err)
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    admin.ChatID,
+			MessageID: admin.MessageID,
+			Text:      fmt.Sprintf("❌ Failed to add person: %v", err),
+		})
+		return
+	}
+
+	startDate := time.Now().Format("2006-01-02")
+	if err := h.storage.CreateInitialAssignment(ctx, admin.CategoryID, personID, "daily", startDate); err != nil {
+		log.Printf("❌ Failed to create assignment: %v", err)
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    admin.ChatID,
+			MessageID: admin.MessageID,
+			Text:      fmt.Sprintf("❌ Failed to create assignment: %v", err),
+		})
+		return
+	}
+
+	h.mu.Lock()
+	delete(h.states, stateKey{UserID: userID})
+	h.mu.Unlock()
+
+	daysDisplay := admin.WorkDays
+	if daysDisplay == "" {
+		daysDisplay = "(none)"
+	}
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:    admin.ChatID,
+		MessageID: admin.MessageID,
+		Text: fmt.Sprintf("✅ Support person added!\n\n👤 %s (@%s)\n🔷 Linear: @%s\n🌍 TZ: %s\n⏰ Hours: %s\n📅 Days: %s\n\nAssigned to category: %s",
+			admin.PersonName, admin.TgUsername, admin.LinearUsername,
+			admin.Timezone, admin.WorkHours, daysDisplay, admin.CategoryName),
+	})
+	log.Printf("✓ Support person added: %s (@%s), category: %s", admin.PersonName, admin.TgUsername, admin.CategoryName)
+}
+
+func (h *Handler) finalizeSetWorkHours(ctx context.Context, b *tgbot.Bot, admin *pendingAdminSession, userID int64) {
+	if _, _, err := storage.ParseWorkHours(admin.WorkHours); err != nil {
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    admin.ChatID,
+			MessageID: admin.MessageID,
+			Text:      fmt.Sprintf("❌ Invalid work hours format: %v", err),
+		})
+		return
+	}
+	if _, err := storage.ParseWorkDays(admin.WorkDays); err != nil {
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    admin.ChatID,
+			MessageID: admin.MessageID,
+			Text:      fmt.Sprintf("❌ Invalid work days format: %v", err),
+		})
+		return
+	}
+	if _, err := storage.ParseTimezone(admin.Timezone); err != nil {
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    admin.ChatID,
+			MessageID: admin.MessageID,
+			Text:      fmt.Sprintf("❌ Invalid timezone format: %v", err),
+		})
+		return
+	}
+
+	if err := h.storage.SetPersonWorkHours(ctx, admin.TgUsername, admin.Timezone, admin.WorkHours, admin.WorkDays); err != nil {
+		log.Printf("❌ Failed to set work hours: %v", err)
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    admin.ChatID,
+			MessageID: admin.MessageID,
+			Text:      fmt.Sprintf("❌ Failed to set work hours: %v", err),
+		})
+		return
+	}
+
+	h.mu.Lock()
+	delete(h.states, stateKey{UserID: userID})
+	h.mu.Unlock()
+
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:    admin.ChatID,
+		MessageID: admin.MessageID,
+		Text:      fmt.Sprintf("✅ Work hours updated!\n\n🌍 Timezone: %s\n⏰ Hours: %s\n📅 Days: %s", admin.Timezone, admin.WorkHours, admin.WorkDays),
+	})
+	log.Printf("✓ Admin updated work hours for @%s", admin.TgUsername)
+}
+
+// handlePersonPickCallback handles ppick: callbacks from schedule pickers in /addperson and /setworkhours.
+func (h *Handler) handlePersonPickCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+
+	data := strings.TrimPrefix(query.Data, "ppick:")
+	parts := strings.SplitN(data, ":", 2)
+	if len(parts) != 2 {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		return
+	}
+	field, value := parts[0], parts[1]
+
+	key := stateKey{UserID: query.From.ID}
+	h.mu.Lock()
+	adminPending, ok := h.states[key].(*pendingAdminSession)
+	h.mu.Unlock()
+	if !ok || adminPending == nil {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		return
+	}
+
+	isAdd := adminPending.Cmd == AdminCmdAddPerson
+	isWH := adminPending.Cmd == AdminCmdSetWorkHours
+	if !isAdd && !isWH {
+		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+		return
+	}
+
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	switch field {
+	case "tz":
+		if isAdd && adminPending.Step != StepAdminPersonTimezone {
+			return
+		}
+		if isWH && adminPending.Step != StepAdminWhTimezone {
+			return
+		}
+		if value != "skip" {
+			adminPending.Timezone = value
+		}
+		if isAdd {
+			adminPending.Step = StepAdminPersonHours
+		} else {
+			adminPending.Step = StepAdminWhHours
+		}
+		h.mu.Lock()
+		h.states[key] = adminPending
+		h.mu.Unlock()
+		h.showHoursPicker(ctx, b, adminPending, isAdd)
+
+	case "hrs":
+		if isAdd && adminPending.Step != StepAdminPersonHours {
+			return
+		}
+		if isWH && adminPending.Step != StepAdminWhHours {
+			return
+		}
+		if value != "skip" {
+			adminPending.WorkHours = value
+		}
+		if isAdd {
+			adminPending.Step = StepAdminPersonDays
+		} else {
+			adminPending.Step = StepAdminWhDays
+		}
+		h.mu.Lock()
+		h.states[key] = adminPending
+		h.mu.Unlock()
+		h.showDaysPicker(ctx, b, adminPending, isAdd)
+
+	case "days":
+		if isAdd && adminPending.Step != StepAdminPersonDays {
+			return
+		}
+		if isWH && adminPending.Step != StepAdminWhDays {
+			return
+		}
+		if value != "skip" {
+			adminPending.WorkDays = value
+		}
+		h.mu.Lock()
+		h.states[key] = adminPending
+		h.mu.Unlock()
+		if isAdd {
+			h.finalizeAddPerson(ctx, b, adminPending, query.From.ID)
+		} else {
+			h.finalizeSetWorkHours(ctx, b, adminPending, query.From.ID)
+		}
+	}
+}
+
 // ===== /addperson flow =====
 
 func (h *Handler) handleAdminAddPersonPending(ctx context.Context, b *tgbot.Bot, msg *models.Message, admin *pendingAdminSession) {
@@ -312,145 +594,35 @@ func (h *Handler) handleAdminAddPersonPending(ctx context.Context, b *tgbot.Bot,
 		admin.LinearUsername = strings.TrimPrefix(text, "@")
 		admin.Step = StepAdminPersonTimezone
 		h.mu.Lock()
-		key := stateKey{UserID: msg.From.ID}
-		h.states[key] = admin
+		h.states[stateKey{UserID: msg.From.ID}] = admin
 		h.mu.Unlock()
-
-		keyboard := buildSkipKeyboard()
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:      admin.ChatID,
-			MessageID:   admin.MessageID,
-			Text:        fmt.Sprintf("✓ Name: %s\n✓ Telegram: @%s\n✓ Linear: @%s\n\n🌍 Enter timezone (e.g., +02:00) or skip:", admin.PersonName, admin.TgUsername, admin.LinearUsername),
-			ReplyMarkup: keyboard,
-		})
+		h.showTzPicker(ctx, b, admin, true)
 
 	case StepAdminPersonTimezone:
-		if text != "" && text != "skip" {
+		if text != "skip" {
 			admin.Timezone = text
 		}
 		admin.Step = StepAdminPersonHours
 		h.mu.Lock()
-		key := stateKey{UserID: msg.From.ID}
-		h.states[key] = admin
+		h.states[stateKey{UserID: msg.From.ID}] = admin
 		h.mu.Unlock()
-
-		keyboard := buildSkipKeyboard()
-		tzDisplay := admin.Timezone
-		if tzDisplay == "" {
-			tzDisplay = "(skipped)"
-		}
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:      admin.ChatID,
-			MessageID:   admin.MessageID,
-			Text:        fmt.Sprintf("✓ Timezone: %s\n\n⏰ Enter work hours (e.g., 08:30-18:30) or skip:", tzDisplay),
-			ReplyMarkup: keyboard,
-		})
+		h.showHoursPicker(ctx, b, admin, true)
 
 	case StepAdminPersonHours:
-		if text != "" && text != "skip" {
+		if text != "skip" {
 			admin.WorkHours = text
 		}
 		admin.Step = StepAdminPersonDays
 		h.mu.Lock()
-		key := stateKey{UserID: msg.From.ID}
-		h.states[key] = admin
+		h.states[stateKey{UserID: msg.From.ID}] = admin
 		h.mu.Unlock()
-
-		hoursDisplay := admin.WorkHours
-		if hoursDisplay == "" {
-			hoursDisplay = "(skipped)"
-		}
-		keyboard := buildSkipKeyboard()
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:      admin.ChatID,
-			MessageID:   admin.MessageID,
-			Text:        fmt.Sprintf("✓ Work hours: %s\n\n📅 Enter work days (e.g., 1-5) or skip:", hoursDisplay),
-			ReplyMarkup: keyboard,
-		})
+		h.showDaysPicker(ctx, b, admin, true)
 
 	case StepAdminPersonDays:
-		if text != "" && text != "skip" {
+		if text != "skip" {
 			admin.WorkDays = text
 		}
-
-		// Validate work hours format if provided
-		if admin.WorkHours != "" {
-			if _, _, err := storage.ParseWorkHours(admin.WorkHours); err != nil {
-				b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-					ChatID:    admin.ChatID,
-					MessageID: admin.MessageID,
-					Text:      fmt.Sprintf("❌ Invalid work hours format: %v", err),
-				})
-				return
-			}
-		}
-
-		// Validate work days format if provided
-		if admin.WorkDays != "" {
-			if _, err := storage.ParseWorkDays(admin.WorkDays); err != nil {
-				b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-					ChatID:    admin.ChatID,
-					MessageID: admin.MessageID,
-					Text:      fmt.Sprintf("❌ Invalid work days format: %v", err),
-				})
-				return
-			}
-		}
-
-		// Validate timezone format if provided
-		if admin.Timezone != "" {
-			if _, err := storage.ParseTimezone(admin.Timezone); err != nil {
-				b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-					ChatID:    admin.ChatID,
-					MessageID: admin.MessageID,
-					Text:      fmt.Sprintf("❌ Invalid timezone format: %v", err),
-				})
-				return
-			}
-		}
-
-		// Create person
-		personID, err := h.storage.AddSupportPersonFull(ctx, admin.PersonName, admin.TgUsername, admin.LinearUsername, admin.Timezone, admin.WorkHours, admin.WorkDays)
-		if err != nil {
-			log.Printf("❌ Failed to add support person: %v", err)
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    admin.ChatID,
-				MessageID: admin.MessageID,
-				Text:      fmt.Sprintf("❌ Failed to add person: %v", err),
-			})
-			return
-		}
-
-		// Create initial assignment
-		startDate := time.Now().Format("2006-01-02")
-		if err := h.storage.CreateInitialAssignment(ctx, admin.CategoryID, personID, "daily", startDate); err != nil {
-			log.Printf("❌ Failed to create assignment: %v", err)
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    admin.ChatID,
-				MessageID: admin.MessageID,
-				Text:      fmt.Sprintf("❌ Failed to create assignment: %v", err),
-			})
-			return
-		}
-
-		// Clean up state
-		key := stateKey{UserID: msg.From.ID}
-		h.mu.Lock()
-		delete(h.states, key)
-		h.mu.Unlock()
-
-		daysDisplay := admin.WorkDays
-		if daysDisplay == "" {
-			daysDisplay = "(none)"
-		}
-
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:    admin.ChatID,
-			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✅ Support person added!\n\n👤 %s\n🔵 @%s | 🔷 @%s\n⏰ %s\n📅 %s", admin.PersonName, admin.TgUsername, admin.LinearUsername, admin.WorkHours, daysDisplay),
-		})
-
-		log.Printf("✓ Admin added support person %s", admin.PersonName)
+		h.finalizeAddPerson(ctx, b, admin, msg.From.ID)
 	}
 }
 
@@ -473,86 +645,21 @@ func (h *Handler) handleAdminSetWorkHoursPending(ctx context.Context, b *tgbot.B
 		admin.Timezone = text
 		admin.Step = StepAdminWhHours
 		h.mu.Lock()
-		key := stateKey{UserID: msg.From.ID}
-		h.states[key] = admin
+		h.states[stateKey{UserID: msg.From.ID}] = admin
 		h.mu.Unlock()
-
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:    admin.ChatID,
-			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✓ Timezone: %s\n\n⏰ Enter work hours (e.g., 08:30-18:30):", admin.Timezone),
-		})
+		h.showHoursPicker(ctx, b, admin, false)
 
 	case StepAdminWhHours:
 		admin.WorkHours = text
 		admin.Step = StepAdminWhDays
 		h.mu.Lock()
-		key := stateKey{UserID: msg.From.ID}
-		h.states[key] = admin
+		h.states[stateKey{UserID: msg.From.ID}] = admin
 		h.mu.Unlock()
-
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:    admin.ChatID,
-			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✓ Work hours: %s\n\n📅 Enter work days (e.g., 1-5 or 12345):", admin.WorkHours),
-		})
+		h.showDaysPicker(ctx, b, admin, false)
 
 	case StepAdminWhDays:
 		admin.WorkDays = text
-
-		// Validate formats
-		if _, _, err := storage.ParseWorkHours(admin.WorkHours); err != nil {
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    admin.ChatID,
-				MessageID: admin.MessageID,
-				Text:      fmt.Sprintf("❌ Invalid work hours format: %v", err),
-			})
-			return
-		}
-
-		if _, err := storage.ParseWorkDays(admin.WorkDays); err != nil {
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    admin.ChatID,
-				MessageID: admin.MessageID,
-				Text:      fmt.Sprintf("❌ Invalid work days format: %v", err),
-			})
-			return
-		}
-
-		if _, err := storage.ParseTimezone(admin.Timezone); err != nil {
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    admin.ChatID,
-				MessageID: admin.MessageID,
-				Text:      fmt.Sprintf("❌ Invalid timezone format: %v", err),
-			})
-			return
-		}
-
-		// Update person
-		err := h.storage.SetPersonWorkHours(ctx, admin.TgUsername, admin.Timezone, admin.WorkHours, admin.WorkDays)
-		if err != nil {
-			log.Printf("❌ Failed to set work hours: %v", err)
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    admin.ChatID,
-				MessageID: admin.MessageID,
-				Text:      fmt.Sprintf("❌ Failed to set work hours: %v", err),
-			})
-			return
-		}
-
-		// Clean up state
-		key := stateKey{UserID: msg.From.ID}
-		h.mu.Lock()
-		delete(h.states, key)
-		h.mu.Unlock()
-
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:    admin.ChatID,
-			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✅ Work hours updated!\n\n🌍 Timezone: %s\n⏰ Hours: %s\n📅 Days: %s", admin.Timezone, admin.WorkHours, admin.WorkDays),
-		})
-
-		log.Printf("✓ Admin updated work hours for @%s", admin.TgUsername)
+		h.finalizeSetWorkHours(ctx, b, admin, msg.From.ID)
 	}
 }
 
@@ -1063,14 +1170,7 @@ func (h *Handler) handleAdminPersonCallback(ctx context.Context, b *tgbot.Bot, u
 	h.mu.Lock()
 	h.states[key] = adminPending
 	h.mu.Unlock()
-
-	keyboard := buildSkipKeyboard()
-	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-		ChatID:      adminPending.ChatID,
-		MessageID:   adminPending.MessageID,
-		Text:        "✓ Person selected\n\n🌍 Enter timezone (e.g., +02:00):",
-		ReplyMarkup: keyboard,
-	})
+	h.showTzPicker(ctx, b, adminPending, false)
 }
 
 // ===== /addtopic flow =====

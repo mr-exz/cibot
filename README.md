@@ -4,9 +4,11 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 
 ## Features
 
-- **Self-service issue creation** (`/support`) — interactive flow with category, request type, title, description, optional media
-- **Support-assisted tickets** (`/ticket`) — reply to any message with `/ticket` to create a Linear issue with reporter, message body, and link auto-captured
+- **Ticket creation** (`/ticket`) — reply to any message to create a Linear issue with reporter, message body, media, and source link auto-captured; or run standalone for a guided flow
 - **Automatic support rotation** (daily/weekly) with on-duty assignment and work-hours awareness
+- **On-call visibility** (`/oncall`) — any group member can see who is on duty right now per category, with real-time availability status
+- **Support person status** (`/status`) — support persons set lunch/brb/away status via inline buttons; member tag updated automatically; shown in ticket confirmations
+- **Linear account linking** (`/mylinear`) — users link their Linear account once; used for ticket assignment
 - **Multi-group support** — bot works across multiple group chats; groups approved/disapproved via `/groups`
 - **Member tagging** — admin forwards a user message to bot in DM to set a Telegram tag on that user in any approved group (Bot API 9.5)
 - **Admin commands** for managing categories, topics, support staff, and rotation — usable via DM or group
@@ -69,38 +71,40 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 
 ## Commands
 
-### User Commands
+### User commands
 
-- `/support` — Start self-service issue creation workflow
-  - Select category → request type → enter title and description (optional media)
-  - Auto-assigned to on-duty support person
-  - Category and request type added as Linear labels (auto-created if missing)
-
-- `/ticket` — Create ticket from an existing Telegram message (support-assisted)
-  - Reply to any message with `/ticket` to start the flow
-  - Select category and request type
-  - Reporter and message link automatically captured in Linear issue
-
+- `/start` — Show available commands
+- `/ticket` — Create a support ticket
+  - Reply to any message with `/ticket` to use it as the ticket source (category → type → priority → done)
+  - Run `/ticket` standalone for a guided self-service flow (category → type → priority → title → description)
+  - Reporter, message body, media attachments, and source link captured automatically
+  - Auto-assigned to the on-duty support person; assignee status shown if they are on lunch/brb/away
+- `/oncall` — Show who is on support duty right now per category (name, @username, availability status)
+- `/status` — Set your support status via inline buttons: Lunch / BRB / Away / Back
+  - Sets your Telegram member tag in all approved groups; clearing status removes the tag
+  - Available to registered support persons only
+- `/mylinear` — Set or update your linked Linear username
 - `/version` — Show bot version and repository link
 
-- `/help` — Show available commands (admin commands shown only to admins)
+### Direct messages (DMs)
+- Admins and registered group members can DM the bot
+- Non-members are silently ignored
 
-### Direct Messages (DMs)
-- **Admins only** can send direct messages to the bot
-- Non-admins sending DMs are silently ignored
+### Admin commands
 
-### Admin Commands
-
-- `/addcategory` — Interactive flow to create a category (name → emoji → Linear team key → topic)
-- `/addtype` — Add a request type to a category
-- `/addperson` — Add a support person with Telegram and Linear usernames
+- `/addcategory` — Create a support category (group → topic → name → emoji → Linear team key)
+- `/addtype` — Add a request type to a category; reuse existing types or create new ones
+- `/addperson` — Add a support person (Telegram username → Linear username → timezone → work hours → work days); picker keyboards populated from existing DB values
 - `/setrotation` — Set rotation period (daily/weekly) for a category
-- `/setworkhours` — Set timezone and work hours for a support person
-- `/addtopic` — Register a forum topic (group → name → topic ID)
-- `/topics` — List all registered topics *(admin only)*
-- `/rotation` — Show current on-duty assignments *(admin only)*
+- `/setworkhours` — Update timezone and work schedule for a support person; same picker keyboards as `/addperson`
+- `/rotation` — Show current on-duty assignments
 - `/groups` — List all known groups with approve/disapprove buttons *(DM only)*
+- `/categories` — Manage category scopes (global / group-level / topic-level) and delete categories; clone a category to another group/topic
+- `/users` — List known users; tap a user to view profile, set member tag, or delete
+- `/export` — Send the current message log as a CSV file and reset it
 - `/offboard` — Remove a departed user from all bot-managed groups
+- `/addtopic` — Register a forum topic (group → name → topic ID)
+- `/topics` — List all registered topics with chat IDs and thread IDs
 - `/dns` *(experimental)* — Manage ps.kz DNS records; requires `DNS_EMAIL` and `DNS_PASSWORD` env vars
   - **Accounts** — list billing accounts
   - **List records** — view all records for a domain
@@ -127,4 +131,4 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
    - **Manage Tags** — required for `/setlabel` (set member tags via Bot API 9.5)
 6. DM the bot with `/groups` to approve the groups where it should operate
 7. Use `/addtopic`, `/addcategory`, `/addtype`, `/addperson` to configure support (all via DM or group)
-8. Users can now use `/support` or `/ticket` to create issues
+8. Users can now use `/ticket` to create issues; `/oncall` to see who is on duty
