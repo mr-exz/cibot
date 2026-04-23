@@ -2,7 +2,9 @@
 
 ## [0.0.49]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/status` now shows the person's current availability status and which categories they are on duty for before the change-status buttons, so support persons can see their duty state at a glance from a DM
+- `/start` now shows context-aware help: in a group only the public Support commands are listed; in a DM the full command list is shown (admin sections visible to admins only)
 
 
 ## [0.0.48]

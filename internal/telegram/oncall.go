@@ -80,9 +80,42 @@ func (h *Handler) handleSetStatus(ctx context.Context, b *tgbot.Bot, msg *models
 		return
 	}
 
+	now := time.Now()
+
+	// Current availability status
+	var statusLine string
+	if person.Status != "" {
+		statusLine = fmt.Sprintf("Status: %s %s", statusEmoji(person.Status), person.Status)
+	} else if isPersonOnlineNow(person, now) {
+		statusLine = "Status: 🟢 Available"
+	} else {
+		statusLine = "Status: 🔴 Offline (outside work hours)"
+	}
+
+	// Find categories this person is currently on duty for
+	rotations, _ := h.storage.ListAllRotations(ctx, now)
+	var onDutyLines []string
+	for _, r := range rotations {
+		if r.OnDuty != nil && r.OnDuty.ID == person.ID {
+			onDutyLines = append(onDutyLines, fmt.Sprintf("  %s %s", r.Category.Emoji, r.Category.Name))
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString(statusLine + "\n")
+	if len(onDutyLines) > 0 {
+		sb.WriteString("\nOn duty now:\n")
+		for _, l := range onDutyLines {
+			sb.WriteString(l + "\n")
+		}
+	} else {
+		sb.WriteString("\nNot on duty right now.\n")
+	}
+	sb.WriteString("\nChange status:")
+
 	params := &tgbot.SendMessageParams{
 		ChatID:      msg.Chat.ID,
-		Text:        "Set your status:",
+		Text:        sb.String(),
 		ReplyMarkup: buildStatusKeyboard(),
 	}
 	if msg.MessageThreadID != 0 {
