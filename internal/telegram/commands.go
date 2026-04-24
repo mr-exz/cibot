@@ -24,8 +24,6 @@ type commandDef struct {
 	Handler   cmdHandler
 }
 
-// groupOrder controls the section order in /help output.
-var groupOrder = []string{"Support", "Admin", "Topics"}
 
 // registerCommands returns the full command list. Adding a command here is
 // the only thing needed — dispatch and /help are both derived from this list.
@@ -172,34 +170,40 @@ func (h *Handler) handleVersion(ctx context.Context, b *tgbot.Bot, msg *models.M
 	h.sendMessage(ctx, b, msg, fmt.Sprintf("cibot %s\nhttps://github.com/mr-exz/cibot", h.version))
 }
 
-// buildHelpText generates the /help message with two sections: Group and DM.
-// Admin-only commands appear in the DM section only for admins.
 func (h *Handler) buildHelpText(username string) string {
 	admin := isAdmin(h.cfg, username)
 
 	var sb strings.Builder
 	sb.WriteString("Available commands:\n")
 
-	// Group section — only commands with a GroupDesc set
-	sb.WriteString("\nGroup:\n")
+	// User — commands usable in both Group and DM
+	sb.WriteString("\nUser — Group & DM:\n")
 	for _, cmd := range h.cmdRegistry {
-		if cmd.GroupDesc == "" {
+		if cmd.AdminOnly || cmd.GroupDesc == "" {
 			continue
 		}
 		sb.WriteString(fmt.Sprintf("  /%s — %s\n", cmd.Name, cmd.GroupDesc))
 	}
 
-	// DM section — all commands (admin-filtered), with full descriptions
-	sb.WriteString("\nDM:\n")
-	for _, group := range groupOrder {
-		for _, cmd := range h.cmdRegistry {
-			if cmd.Group != group {
-				continue
+	// User — DM-only commands (no GroupDesc)
+	sb.WriteString("\nUser — DM:\n")
+	for _, cmd := range h.cmdRegistry {
+		if cmd.AdminOnly || cmd.Group != "Support" || cmd.GroupDesc != "" {
+			continue
+		}
+		sb.WriteString(fmt.Sprintf("  /%s — %s\n", cmd.Name, cmd.Desc))
+	}
+
+	// Admin — only visible to admins
+	if admin {
+		sb.WriteString("\nAdmin:\n")
+		for _, group := range []string{"Admin", "Topics"} {
+			for _, cmd := range h.cmdRegistry {
+				if cmd.Group != group {
+					continue
+				}
+				sb.WriteString(fmt.Sprintf("  /%s — %s\n", cmd.Name, cmd.Desc))
 			}
-			if cmd.AdminOnly && !admin {
-				continue
-			}
-			sb.WriteString(fmt.Sprintf("  /%s — %s\n", cmd.Name, cmd.Desc))
 		}
 	}
 

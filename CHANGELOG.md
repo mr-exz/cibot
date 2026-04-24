@@ -2,7 +2,8 @@
 
 ## [0.0.51]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/start` help output is now organised by role: "User — Group & DM" lists commands usable in both contexts, "User — DM" lists DM-only user commands, and "Admin" lists all admin commands (visible only to admins) — previously a flat Group/DM split mixed user and admin commands in the same section
 
 
 ## [0.0.50]
