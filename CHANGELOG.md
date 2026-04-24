@@ -2,7 +2,8 @@
 
 ## [0.0.58]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- `/ticket` standalone (non-reply) in forum/topic groups now correctly asks for a description instead of immediately showing category buttons — Telegram implicitly sets `reply_to_message` to the topic header on every message in a topic, so the bot was treating every standalone `/ticket` in a topic as a reply; fixed by detecting the topic header (its message ID equals `message_thread_id`) and falling back to the standalone flow
 
 
 ## [0.0.57]

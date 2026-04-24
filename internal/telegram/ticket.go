@@ -19,6 +19,14 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		return
 	}
 
+	// In forum/topic groups every message implicitly "replies" to the topic header
+	// (the service message that created the topic), whose ID equals the thread ID.
+	// This is not a real user reply — fall back to the standalone flow.
+	if msg.MessageThreadID != 0 && msg.ReplyToMessage.ID == msg.MessageThreadID {
+		h.handleSupportStart(ctx, b, msg)
+		return
+	}
+
 	replied := msg.ReplyToMessage
 
 	link := formatTelegramLink(msg.Chat.ID, msg.MessageThreadID, replied.ID)
