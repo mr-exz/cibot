@@ -117,6 +117,11 @@ type pendingSession struct {
 	ChatID       int64
 	ThreadID     int
 
+	// support flow (standalone /ticket) fields
+	Description  string
+	SupportMsgID int
+	ChatTitle    string
+
 	// ticket-specific fields
 	TicketMsgLink    string
 	TicketMsgBody    string

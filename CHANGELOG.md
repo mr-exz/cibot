@@ -2,7 +2,8 @@
 
 ## [0.0.57]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/ticket` standalone (non-reply) flow now asks for a description first, then shows category/type/priority buttons — previously the flow started with buttons and ended with title and description prompts; title is now auto-generated from the first 5 words of the description (matching the reply-based `/ticket` behaviour)
 
 
 ## [0.0.56]

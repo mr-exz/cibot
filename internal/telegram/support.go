@@ -40,14 +40,14 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 	linearUsername, _ := h.storage.GetUserLinearUsername(ctx, msg.From.ID)
 	reporterName := strings.TrimSpace(msg.From.FirstName + " " + msg.From.LastName)
 
-	text := "🗂️ Select issue category:"
+	text := "📝 Describe your issue (you can also attach a photo or file):"
 	if linearUsername == "" {
 		text = "⚠️ Your Telegram account is not linked to Linear. Use /mylinear to link it.\n\n" + text
 	}
 
 	session := &pendingSession{
 		Flow:             FlowSupport,
-		Step:             StepCategory,
+		Step:             StepDescription,
 		UserID:           msg.From.ID,
 		ChatID:           msg.Chat.ID,
 		ThreadID:         msg.MessageThreadID,
@@ -55,12 +55,12 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 		ReporterName:     reporterName,
 		ReporterUsername: msg.From.Username,
 		RequesterLinear:  linearUsername,
+		ChatTitle:        msg.Chat.Title,
 	}
 
 	params := &tgbot.SendMessageParams{
-		ChatID:      msg.Chat.ID,
-		Text:        text,
-		ReplyMarkup: buildCategoryKeyboard(categories),
+		ChatID: msg.Chat.ID,
+		Text:   text,
 	}
 	if msg.MessageThreadID != 0 {
 		params.MessageThreadID = msg.MessageThreadID
@@ -292,17 +292,7 @@ func (h *Handler) handlePriorityCallback(ctx context.Context, b *tgbot.Bot, upda
 	if pending.Flow == FlowTicket {
 		h.createTicketIssue(ctx, b, pending)
 	} else {
-		h.mu.Lock()
-		pending.Step = StepTitle
-		h.mu.Unlock()
-		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:    pending.ChatID,
-			MessageID: pending.MessageID,
-			Text:      "✓ " + priorityLabel(priority) + "\n\n📝 Enter issue title:",
-			ReplyMarkup: &models.InlineKeyboardMarkup{
-				InlineKeyboard: [][]models.InlineKeyboardButton{},
-			},
-		})
+		h.createSupportIssue(ctx, b, pending)
 	}
 }
 
@@ -370,153 +360,143 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 			ReplyMarkup: buildCategoryKeyboard(categories),
 		})
 
-	case StepTitle:
-		if text == "" {
-			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    pending.ChatID,
-				MessageID: pending.MessageID,
-				Text:      "❌ Title cannot be empty",
-			})
-			return
-		}
-
-		h.mu.Lock()
-		pending.Title = text
-		pending.Step = StepDescription
-		h.mu.Unlock()
-
-		if _, err := b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-			ChatID:    pending.ChatID,
-			MessageID: pending.MessageID,
-			Text:      fmt.Sprintf("✓ Title: %s\n\nEnter description (optional, or send media):", text),
-		}); err != nil {
-			log.Printf("⚠️  StepTitle EditMessageText failed (chat=%d msg=%d): %v", pending.ChatID, pending.MessageID, err)
-		}
-
 	case StepDescription:
-		// DON'T delete user's message - preserve data
-		// User's original message will remain in Telegram for reference
+		// Collect description text and any attached media
+		description := text
 
-		// Collect description and handle media
-		h.mu.Lock()
-		title := pending.Title
-		teamKey := pending.TeamKey
-		categoryName := pending.CategoryName
-		typeName := pending.TypeName
-		delete(h.states, key)
-		h.mu.Unlock()
-
-		description := text // Empty string is OK
-
-		// Handle photos/documents
 		if msg.Photo != nil && len(msg.Photo) > 0 {
-			// Get highest resolution photo
 			photo := msg.Photo[len(msg.Photo)-1]
-			// Try to get file info and build download link
-			file, err := b.GetFile(ctx, &tgbot.GetFileParams{FileID: photo.FileID})
-			if err == nil && file != nil {
+			if file, err := b.GetFile(ctx, &tgbot.GetFileParams{FileID: photo.FileID}); err == nil && file != nil {
 				fileLink := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", h.cfg.TelegramToken, file.FilePath)
 				description += fmt.Sprintf("\n\n📷 **Photo:**\n[Image](%s)", fileLink)
 			}
 		}
-
 		if msg.Document != nil {
-			file, err := b.GetFile(ctx, &tgbot.GetFileParams{FileID: msg.Document.FileID})
-			if err == nil && file != nil {
+			if file, err := b.GetFile(ctx, &tgbot.GetFileParams{FileID: msg.Document.FileID}); err == nil && file != nil {
 				fileLink := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", h.cfg.TelegramToken, file.FilePath)
 				description += fmt.Sprintf("\n\n📎 **Attachment:**\n[%s](%s)", msg.Document.FileName, fileLink)
 			}
 		}
 
-		// Add Telegram context
-		tgLink := formatTelegramLink(msg.Chat.ID, msg.MessageThreadID, msg.ID)
-		reporter := pending.ReporterName
-		if pending.ReporterUsername != "" {
-			reporter = fmt.Sprintf("[%s](https://t.me/%s)", pending.ReporterName, pending.ReporterUsername)
-		}
-		if pending.RequesterLinear != "" {
-			reporter += fmt.Sprintf(" / Linear: %s", pending.RequesterLinear)
-		}
-		description += fmt.Sprintf("\n\n---\n\n**📌 Telegram Source**\n"+
-			"- **Reporter:** %s\n"+
-			"- **Chat:** %s\n"+
-			"- **Category:** %s\n"+
-			"- **Type:** %s",
-			reporter,
-			msg.Chat.Title,
-			categoryName,
-			typeName)
-		if tgLink != "" {
-			description += fmt.Sprintf("\n- **Link:** %s", tgLink)
-		}
-
-		// Get on-duty support person
-		onDutyResult, err := h.storage.GetOnDutyPersonResult(ctx, pending.CategoryID, time.Now())
-		if err != nil {
-			log.Printf("⚠️  Failed to get on-duty person: %v", err)
-			onDutyResult = nil
-		}
-
-		assignee := ""
-		if onDutyResult != nil && onDutyResult.Person != nil {
-			assignee = onDutyResult.Person.LinearUsername
-		}
-
-		// Add offline warning to description if person is outside working hours
-		if onDutyResult != nil && !onDutyResult.Online {
-			description += "\n\n⚠️ **Note:** Assigned person is currently outside working hours."
-		}
-
-		// Create Linear issue with category and type as labels
-		url, err := h.linear.CreateIssue(ctx, title, description, teamKey, assignee, []string{categoryName, typeName, priorityName(pending.Priority)}, pending.Priority)
-		if err != nil {
-			log.Printf("❌ Failed to create Linear issue: %v\n", err)
+		// Load categories before showing the keyboard
+		categories, err := h.storage.ListCategoriesForContext(ctx, pending.ChatID, pending.ThreadID)
+		if err != nil || len(categories) == 0 {
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    pending.ChatID,
 				MessageID: pending.MessageID,
-				Text:      fmt.Sprintf("❌ Failed to create issue: %v", err),
+				Text:      "❌ No categories configured. Contact admin.",
 			})
+			h.mu.Lock()
+			delete(h.states, key)
+			h.mu.Unlock()
 			return
 		}
 
-		// Build final response
-		assigneeStr := "(unassigned)"
-		if onDutyResult != nil && onDutyResult.Person != nil {
-			person := onDutyResult.Person
-			onlineIcon := "🟢"
-			if !onDutyResult.Online {
-				onlineIcon = "🔴"
-			}
-			assigneeStr = fmt.Sprintf("%s %s\n  🔵 Telegram: @%s\n  🔷 Linear: @%s", person.Name, onlineIcon, person.TelegramUsername, person.LinearUsername)
-			if person.Status != "" {
-				assigneeStr += "\n  " + statusEmoji(person.Status) + " " + person.Status
-			}
-		}
+		h.mu.Lock()
+		pending.Description = description
+		pending.SupportMsgID = msg.ID
+		pending.Step = StepCategory
+		h.mu.Unlock()
 
-		finalText := fmt.Sprintf(
-			"✅ Issue created!\n\n"+
-				"📝 Title: %s\n"+
-				"📄 Description: %s\n"+
-				"👤 Assigned to: %s\n"+
-				"🔗 Link: %s",
-			title,
-			truncateStr(text, 50),
-			assigneeStr,
-			url,
-		)
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:      pending.ChatID,
+			MessageID:   pending.MessageID,
+			Text:        "✓ Description saved.\n\n🗂️ Select issue category:",
+			ReplyMarkup: buildCategoryKeyboard(categories),
+		})
+	}
+}
 
+// createSupportIssue creates a Linear issue from a standalone /ticket (non-reply) session.
+func (h *Handler) createSupportIssue(ctx context.Context, b *tgbot.Bot, pending *pendingSession) {
+	title := ticketTitle(pending.Description, pending.CreatedAt)
+	if title == "" || strings.TrimSpace(pending.Description) == "" {
+		title = fmt.Sprintf("[%s] Ticket from Telegram (%s)", pending.CategoryName, pending.CreatedAt.Format("2006-01-02 15:04"))
+	}
+
+	reporter := pending.ReporterName
+	if pending.ReporterUsername != "" {
+		reporter = fmt.Sprintf("[%s](https://t.me/%s)", pending.ReporterName, pending.ReporterUsername)
+	}
+	if pending.RequesterLinear != "" {
+		reporter += fmt.Sprintf(" / Linear: %s", pending.RequesterLinear)
+	}
+
+	tgLink := formatTelegramLink(pending.ChatID, pending.ThreadID, pending.SupportMsgID)
+	description := pending.Description + fmt.Sprintf("\n\n---\n\n**📌 Telegram Source**\n"+
+		"- **Reporter:** %s\n"+
+		"- **Chat:** %s\n"+
+		"- **Category:** %s\n"+
+		"- **Type:** %s",
+		reporter,
+		pending.ChatTitle,
+		pending.CategoryName,
+		pending.TypeName)
+	if tgLink != "" {
+		description += fmt.Sprintf("\n- **Link:** %s", tgLink)
+	}
+
+	onDutyResult, err := h.storage.GetOnDutyPersonResult(ctx, pending.CategoryID, time.Now())
+	if err != nil {
+		log.Printf("⚠️  Failed to get on-duty person: %v", err)
+		onDutyResult = nil
+	}
+
+	assignee := ""
+	if onDutyResult != nil && onDutyResult.Person != nil {
+		assignee = onDutyResult.Person.LinearUsername
+	}
+	if onDutyResult != nil && !onDutyResult.Online {
+		description += "\n\n⚠️ **Note:** Assigned person is currently outside working hours."
+	}
+
+	url, err := h.linear.CreateIssue(ctx, title, description, pending.TeamKey, assignee, []string{pending.CategoryName, pending.TypeName, priorityName(pending.Priority)}, pending.Priority)
+	if err != nil {
+		log.Printf("❌ Failed to create Linear issue: %v\n", err)
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    pending.ChatID,
 			MessageID: pending.MessageID,
-			Text:      finalText,
+			Text:      fmt.Sprintf("❌ Failed to create issue: %v", err),
 		})
-
-		assignedPersonName := "unassigned"
-		if onDutyResult != nil && onDutyResult.Person != nil {
-			assignedPersonName = onDutyResult.Person.Name
-		}
-		log.Printf("✓ Issue created: %s (assigned to %s)", url, assignedPersonName)
+		return
 	}
+
+	h.mu.Lock()
+	delete(h.states, stateKey{UserID: pending.UserID})
+	h.mu.Unlock()
+
+	assigneeStr := "(unassigned)"
+	if onDutyResult != nil && onDutyResult.Person != nil {
+		person := onDutyResult.Person
+		onlineIcon := "🟢"
+		if !onDutyResult.Online {
+			onlineIcon = "🔴"
+		}
+		assigneeStr = fmt.Sprintf("%s %s\n  🔵 Telegram: @%s\n  🔷 Linear: @%s", person.Name, onlineIcon, person.TelegramUsername, person.LinearUsername)
+		if person.Status != "" {
+			assigneeStr += "\n  " + statusEmoji(person.Status) + " " + person.Status
+		}
+	}
+
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:    pending.ChatID,
+		MessageID: pending.MessageID,
+		Text: fmt.Sprintf(
+			"✅ Issue created!\n\n"+
+				"📋 Category: %s\n"+
+				"👤 Assigned to: %s\n"+
+				"🔗 Linear: %s",
+			pending.CategoryName,
+			assigneeStr,
+			url,
+		),
+	})
+
+	assignedPersonName := "unassigned"
+	if onDutyResult != nil && onDutyResult.Person != nil {
+		assignedPersonName = onDutyResult.Person.Name
+	}
+	log.Printf("✓ Support issue created: %s (assigned to %s)", url, assignedPersonName)
 }
 
 // Helper functions
@@ -531,11 +511,4 @@ func parseTypeID(idStr string) int64 {
 	var id int64
 	fmt.Sscanf(idStr, "%d", &id)
 	return id
-}
-
-func truncateStr(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
 }
