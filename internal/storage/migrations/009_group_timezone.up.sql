@@ -1,0 +1,1 @@
+ALTER TABLE group_chats ADD COLUMN timezone TEXT NOT NULL DEFAULT '';

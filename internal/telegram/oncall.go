@@ -104,7 +104,15 @@ func (h *Handler) handlePingCallback(ctx context.Context, b *tgbot.Bot, update *
 	if clicker == "" {
 		clicker = query.From.FirstName
 	}
-	pingNote := fmt.Sprintf("\n\nPinged %s by %s at %s", username, clicker, time.Now().Format("15:04"))
+
+	loc := time.UTC
+	if tzStr, err := h.storage.GetGroupTimezone(ctx, chatID); err == nil && tzStr != "" {
+		if l, err := time.LoadLocation(tzStr); err == nil {
+			loc = l
+		}
+	}
+	now := time.Now().In(loc)
+	pingNote := fmt.Sprintf("\n\nPinged %s by %s at %s %s", username, clicker, now.Format("15:04"), now.Format("MST"))
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      chatID,
 		MessageID:   msgID,

@@ -2,7 +2,9 @@
 
 ## [0.0.53]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- Group timezone setting — `/groups` now shows the configured timezone next to each group name (defaults to `UTC` when not set) and adds a "🕐 Set TZ" button per group that opens a timezone picker populated from existing person schedules plus common presets (`UTC`, `+03:00`, `+04:00`, `+05:00`, `+06:00`); selected timezone is persisted via migration 009
+- `/oncall` Ping time now reflects the group's configured timezone — the ping note shows local time and timezone label (e.g. "Pinged johndoe by alice at 16:35 UTC+5"); falls back to UTC when no group timezone is set
 
 
 ## [0.0.52]

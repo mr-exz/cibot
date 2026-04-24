@@ -711,6 +711,7 @@ type GroupChat struct {
 	Title    string
 	Approved bool
 	AddedAt  string
+	Timezone string
 }
 
 // RegisterGroup adds a group to the database if not already present (unapproved by default).
@@ -763,7 +764,7 @@ func (d *DB) ListApprovedGroupIDs(ctx context.Context) ([]int64, error) {
 // ListGroups returns all known groups ordered by approved desc, added_at asc.
 func (d *DB) ListGroups(ctx context.Context) ([]GroupChat, error) {
 	rows, err := d.db.QueryContext(ctx,
-		"SELECT chat_id, title, approved, added_at FROM group_chats ORDER BY approved DESC, added_at ASC")
+		"SELECT chat_id, title, approved, added_at, timezone FROM group_chats ORDER BY approved DESC, added_at ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -773,13 +774,29 @@ func (d *DB) ListGroups(ctx context.Context) ([]GroupChat, error) {
 	for rows.Next() {
 		var g GroupChat
 		var approved int
-		if err := rows.Scan(&g.ChatID, &g.Title, &approved, &g.AddedAt); err != nil {
+		if err := rows.Scan(&g.ChatID, &g.Title, &approved, &g.AddedAt, &g.Timezone); err != nil {
 			return nil, err
 		}
 		g.Approved = approved == 1
 		groups = append(groups, g)
 	}
 	return groups, rows.Err()
+}
+
+// GetGroupTimezone returns the configured timezone for a group, or "" if not set.
+func (d *DB) GetGroupTimezone(ctx context.Context, chatID int64) (string, error) {
+	var tz string
+	err := d.db.QueryRowContext(ctx, "SELECT timezone FROM group_chats WHERE chat_id = ?", chatID).Scan(&tz)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return tz, err
+}
+
+// SetGroupTimezone sets the timezone for a group.
+func (d *DB) SetGroupTimezone(ctx context.Context, chatID int64, tz string) error {
+	_, err := d.db.ExecContext(ctx, "UPDATE group_chats SET timezone = ? WHERE chat_id = ?", tz, chatID)
+	return err
 }
 
 // === User Labels ===
