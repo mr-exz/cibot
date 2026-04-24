@@ -6,8 +6,6 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"time"
-
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )
@@ -160,7 +158,7 @@ func (h *Handler) handleGroupTZCallback(ctx context.Context, b *tgbot.Bot, updat
 			return
 		}
 		tz := rest[idx+1:]
-		if _, err := time.LoadLocation(tz); err != nil {
+		if _, err := parseLocation(tz); err != nil {
 			log.Printf("⚠️ invalid timezone %q: %v", tz, err)
 			return
 		}

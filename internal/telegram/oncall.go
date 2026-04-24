@@ -107,7 +107,7 @@ func (h *Handler) handlePingCallback(ctx context.Context, b *tgbot.Bot, update *
 
 	loc := time.UTC
 	if tzStr, err := h.storage.GetGroupTimezone(ctx, chatID); err == nil && tzStr != "" {
-		if l, err := time.LoadLocation(tzStr); err == nil {
+		if l, err := parseLocation(tzStr); err == nil {
 			loc = l
 		}
 	}

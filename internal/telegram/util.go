@@ -10,11 +10,21 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-telegram/bot/models"
 	"github.com/mr-exz/cibot/internal/config"
 	"github.com/mr-exz/cibot/internal/storage"
 )
+
+// parseLocation resolves a timezone string to a *time.Location.
+// Accepts IANA names ("UTC", "Asia/Almaty") and fixed-offset strings ("+05:00", "-07:30").
+func parseLocation(tz string) (*time.Location, error) {
+	if loc, err := time.LoadLocation(tz); err == nil {
+		return loc, nil
+	}
+	return storage.ParseTimezone(tz)
+}
 
 // ButtonItem represents a button with label and callback data
 type ButtonItem struct {

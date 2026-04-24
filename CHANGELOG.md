@@ -2,7 +2,8 @@
 
 ## [0.0.54]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- Group timezone "Set TZ" flow now correctly accepts offset-format timezones (e.g. `+05:00`) — previously `time.LoadLocation` was used for validation and timezone resolution, which only accepts IANA names and silently rejected all offset strings, so the selection was never saved; replaced with a `parseLocation` helper that tries `time.LoadLocation` first and falls back to `storage.ParseTimezone` for offset strings
 
 
 ## [0.0.53]
