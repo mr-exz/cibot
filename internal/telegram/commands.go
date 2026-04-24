@@ -14,9 +14,11 @@ type cmdHandler func(ctx context.Context, b *tgbot.Bot, msg *models.Message)
 
 // commandDef describes a bot command: its name, one-line description,
 // which UI group it belongs to, and whether it is admin-only.
+// GroupDesc is shown in the Group section of /start; leave empty to omit the command from that section.
 type commandDef struct {
 	Name      string
 	Desc      string
+	GroupDesc string
 	Group     string
 	AdminOnly bool
 	Handler   cmdHandler
@@ -42,10 +44,11 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler: h.handleVersion,
 		},
 		{
-			Name:    "ticket",
-			Desc:    "Create a ticket (reply to a message to use it as source)",
-			Group:   "Support",
-			Handler: h.handleTicketStart,
+			Name:      "ticket",
+			Desc:      "Create a ticket; reply to a message to use it as source, or run standalone for guided flow",
+			GroupDesc: "Create a ticket — reply to any message to open it as a ticket",
+			Group:     "Support",
+			Handler:   h.handleTicketStart,
 		},
 		{
 			Name:    "mylinear",
@@ -54,16 +57,18 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler: h.handleMyLinear,
 		},
 		{
-			Name:    "oncall",
-			Desc:    "Show who is on support duty right now",
-			Group:   "Support",
-			Handler: h.handleOnCall,
+			Name:      "oncall",
+			Desc:      "Show who is on support duty right now (run in a group for topic-specific results)",
+			GroupDesc: "Show who is on support duty in this topic right now",
+			Group:     "Support",
+			Handler:   h.handleOnCall,
 		},
 		{
-			Name:    "status",
-			Desc:    "Set your support status (lunch, brb, away, back)",
-			Group:   "Support",
-			Handler: h.handleSetStatus,
+			Name:      "status",
+			Desc:      "View your duty status and set availability — use in DM for full on-call info",
+			GroupDesc: "Set your availability status (lunch, brb, away, back)",
+			Group:     "Support",
+			Handler:   h.handleSetStatus,
 		},
 		{
 			Name:      "addcategory",
@@ -160,47 +165,40 @@ func (h *Handler) registerCommands() []commandDef {
 }
 
 func (h *Handler) handleStart(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
-	inGroup := msg.Chat.Type == "group" || msg.Chat.Type == "supergroup"
-	h.sendMessage(ctx, b, msg, h.buildHelpText(msg.From.Username, inGroup))
+	h.sendMessage(ctx, b, msg, h.buildHelpText(msg.From.Username))
 }
 
 func (h *Handler) handleVersion(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	h.sendMessage(ctx, b, msg, fmt.Sprintf("cibot %s\nhttps://github.com/mr-exz/cibot", h.version))
 }
 
-// buildHelpText generates the /help message.
-// In a group only the Support group (public commands) is shown.
-// In a DM the full list is shown; admin-only commands are included only for admins.
-func (h *Handler) buildHelpText(username string, inGroup bool) string {
+// buildHelpText generates the /help message with two sections: Group and DM.
+// Admin-only commands appear in the DM section only for admins.
+func (h *Handler) buildHelpText(username string) string {
 	admin := isAdmin(h.cfg, username)
 
-	grouped := make(map[string][]commandDef)
-	for _, cmd := range h.cmdRegistry {
-		if cmd.AdminOnly && !admin {
-			continue
-		}
-		if inGroup && cmd.Group != "Support" {
-			continue
-		}
-		grouped[cmd.Group] = append(grouped[cmd.Group], cmd)
-	}
-
 	var sb strings.Builder
-	if inGroup {
-		sb.WriteString("Available commands:\n")
-	} else {
-		sb.WriteString("Hi! Here are the available commands:\n")
-	}
+	sb.WriteString("Available commands:\n")
 
-	for _, group := range groupOrder {
-		cmds, ok := grouped[group]
-		if !ok {
+	// Group section — only commands with a GroupDesc set
+	sb.WriteString("\nGroup:\n")
+	for _, cmd := range h.cmdRegistry {
+		if cmd.GroupDesc == "" {
 			continue
 		}
-		if !inGroup {
-			sb.WriteString(fmt.Sprintf("\n%s:\n", group))
-		}
-		for _, cmd := range cmds {
+		sb.WriteString(fmt.Sprintf("  /%s — %s\n", cmd.Name, cmd.GroupDesc))
+	}
+
+	// DM section — all commands (admin-filtered), with full descriptions
+	sb.WriteString("\nDM:\n")
+	for _, group := range groupOrder {
+		for _, cmd := range h.cmdRegistry {
+			if cmd.Group != group {
+				continue
+			}
+			if cmd.AdminOnly && !admin {
+				continue
+			}
 			sb.WriteString(fmt.Sprintf("  /%s — %s\n", cmd.Name, cmd.Desc))
 		}
 	}

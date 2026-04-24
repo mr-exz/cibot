@@ -109,6 +109,9 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	// status callbacks
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "setstatus:", tgbot.MatchTypePrefix, h.handleStatusCallback)
 
+	// oncall ping
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "ping:", tgbot.MatchTypePrefix, h.handlePingCallback)
+
 	// offboard callbacks
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "offbrd_grp:", tgbot.MatchTypePrefix, h.handleOffboardGroupCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "offbrd_all:", tgbot.MatchTypePrefix, h.handleOffboardAllCallback)

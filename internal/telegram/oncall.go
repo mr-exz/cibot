@@ -27,6 +27,9 @@ func (h *Handler) handleOnCall(ctx context.Context, b *tgbot.Bot, msg *models.Me
 	var sb strings.Builder
 	sb.WriteString("On-duty support:\n\n")
 
+	seen := map[string]bool{}
+	var pingUsernames []string
+
 	for _, cat := range categories {
 		result, err := h.storage.GetOnDutyPersonResult(ctx, cat.ID, now)
 		if err != nil {
@@ -43,24 +46,66 @@ func (h *Handler) handleOnCall(ctx context.Context, b *tgbot.Bot, msg *models.Me
 			indicator = "🔴"
 		}
 
-		line := fmt.Sprintf("%s %s: %s (@%s) - ", cat.Emoji, cat.Name, person.Name, person.TelegramUsername)
+		line := fmt.Sprintf("%s %s: %s (%s) - ", cat.Emoji, cat.Name, person.Name, person.TelegramUsername)
 		if person.Status != "" {
 			line += person.Status + " " + indicator
 		} else if result.Online {
 			line += "available " + indicator
-		} else if person.WorkHours != "" {
+		} else {
+			line += "offline " + indicator
+		}
+		if person.WorkHours != "" {
 			tz := person.Timezone
 			if tz == "" {
 				tz = "UTC"
 			}
-			line += "offline " + indicator + " (hours: " + person.WorkHours + " " + tz + ")"
-		} else {
-			line += "offline " + indicator
+			line += " (hours: " + person.WorkHours + " " + tz + ")"
 		}
 		sb.WriteString(line + "\n")
+
+		if person.TelegramUsername != "" && !seen[person.TelegramUsername] {
+			seen[person.TelegramUsername] = true
+			pingUsernames = append(pingUsernames, person.TelegramUsername)
+		}
 	}
 
-	h.sendMessage(ctx, b, msg, strings.TrimRight(sb.String(), "\n"))
+	params := &tgbot.SendMessageParams{
+		ChatID: msg.Chat.ID,
+		Text:   strings.TrimRight(sb.String(), "\n"),
+	}
+	if msg.MessageThreadID != 0 {
+		params.MessageThreadID = msg.MessageThreadID
+	}
+	if len(pingUsernames) > 0 {
+		var rows [][]models.InlineKeyboardButton
+		for _, u := range pingUsernames {
+			rows = append(rows, []models.InlineKeyboardButton{
+				{Text: "Ping @" + u, CallbackData: "ping:" + u},
+			})
+		}
+		params.ReplyMarkup = &models.InlineKeyboardMarkup{InlineKeyboard: rows}
+	}
+	b.SendMessage(ctx, params)
+}
+
+func (h *Handler) handlePingCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+	username := strings.TrimPrefix(query.Data, "ping:")
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	chatID := query.Message.Message.Chat.ID
+	threadID := query.Message.Message.MessageThreadID
+	params := &tgbot.SendMessageParams{
+		ChatID: chatID,
+		Text:   "@" + username,
+	}
+	if threadID != 0 {
+		params.MessageThreadID = threadID
+	}
+	b.SendMessage(ctx, params)
 }
 
 func (h *Handler) handleSetStatus(ctx context.Context, b *tgbot.Bot, msg *models.Message) {

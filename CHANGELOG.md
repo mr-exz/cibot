@@ -2,7 +2,13 @@
 
 ## [0.0.50]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/oncall` now shows a Ping button for each on-duty person; pressing it sends a new `@username` message into the same chat/topic to trigger a Telegram mention notification
+- `/oncall` now shows work hours and timezone for online persons (previously only shown when offline)
+
+### Fixed
+- `/oncall` no longer displays the `@` prefix on usernames in the status text, preventing unintended mention notifications on every `/oncall` call
+- `/start` Group section no longer shows commands that have no group-specific description (e.g. `/start`, `/version`, `/mylinear`); only commands with an explicit `GroupDesc` (`/ticket`, `/oncall`, `/status`) appear in the Group section
 
 
 ## [0.0.49]
