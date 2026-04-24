@@ -2,7 +2,8 @@
 
 ## [0.0.59]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- `/ticket` (and `/support`) standalone flow in forum/topic groups no longer silently ignores the user's description — the topic-header guard added in 0.0.58 was only applied in `handleTicketStart`, so when it fell back to `handleSupportStart`, `handleSupportStart` saw a non-nil `reply_to_message` and called `handleTicketStart` again, creating infinite mutual recursion; the session was never stored, so the bot received the user's text but had no state to match it against; fixed by applying the same topic-header check in `handleSupportStart` before it redirects to `handleTicketStart`
 
 
 ## [0.0.58]

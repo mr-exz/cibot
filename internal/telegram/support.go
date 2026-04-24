@@ -14,7 +14,9 @@ import (
 
 // handleSupportStart initiates the /support flow, or the /ticket flow if msg is a reply.
 func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
-	if msg.ReplyToMessage != nil {
+	// Redirect to ticket flow only for real replies, not the implicit topic-header
+	// reply that Telegram attaches to every message sent in a forum topic.
+	if msg.ReplyToMessage != nil && !(msg.MessageThreadID != 0 && msg.ReplyToMessage.ID == msg.MessageThreadID) {
 		h.handleTicketStart(ctx, b, msg)
 		return
 	}
