@@ -174,10 +174,10 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 
 	reporter := pending.ReporterName
 	if pending.ReporterUsername != "" {
-		reporter = fmt.Sprintf("%s (@%s)", pending.ReporterName, pending.ReporterUsername)
+		reporter = fmt.Sprintf("[%s](https://t.me/%s)", pending.ReporterName, pending.ReporterUsername)
 	}
 	if pending.RequesterLinear != "" {
-		reporter += fmt.Sprintf(" / Linear: @%s", pending.RequesterLinear)
+		reporter += fmt.Sprintf(" / Linear: %s", pending.RequesterLinear)
 	}
 
 	description := fmt.Sprintf("**📌 Telegram Source**\n"+

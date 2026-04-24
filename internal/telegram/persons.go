@@ -206,16 +206,16 @@ func (h *Handler) handlePersonsCallback(ctx context.Context, b *tgbot.Bot, updat
 			return
 		}
 		admin := &pendingAdminSession{
-			Cmd:       AdminCmdSetWorkHours,
-			Step:      StepAdminWhTimezone,
-			ChatID:    chatID,
-			MessageID: messageID,
-			UserID:    userID,
-			PersonID:  personID,
+			Cmd:        AdminCmdSetWorkHours,
+			Step:       StepAdminWhTimezone,
+			ChatID:     chatID,
+			MessageID:  messageID,
+			UserID:     userID,
+			PersonID:   personID,
 			TgUsername: person.TelegramUsername,
-			Timezone:  person.Timezone,
-			WorkHours: person.WorkHours,
-			WorkDays:  person.WorkDays,
+			Timezone:   person.Timezone,
+			WorkHours:  person.WorkHours,
+			WorkDays:   person.WorkDays,
 		}
 		h.mu.Lock()
 		h.states[stateKey{UserID: userID}] = admin

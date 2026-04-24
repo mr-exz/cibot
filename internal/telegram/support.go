@@ -299,6 +299,9 @@ func (h *Handler) handlePriorityCallback(ctx context.Context, b *tgbot.Bot, upda
 			ChatID:    pending.ChatID,
 			MessageID: pending.MessageID,
 			Text:      "✓ " + priorityLabel(priority) + "\n\n📝 Enter issue title:",
+			ReplyMarkup: &models.InlineKeyboardMarkup{
+				InlineKeyboard: [][]models.InlineKeyboardButton{},
+			},
 		})
 	}
 }
@@ -429,10 +432,10 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 		tgLink := formatTelegramLink(msg.Chat.ID, msg.MessageThreadID, msg.ID)
 		reporter := pending.ReporterName
 		if pending.ReporterUsername != "" {
-			reporter = fmt.Sprintf("%s (@%s)", pending.ReporterName, pending.ReporterUsername)
+			reporter = fmt.Sprintf("[%s](https://t.me/%s)", pending.ReporterName, pending.ReporterUsername)
 		}
 		if pending.RequesterLinear != "" {
-			reporter += fmt.Sprintf(" / Linear: @%s", pending.RequesterLinear)
+			reporter += fmt.Sprintf(" / Linear: %s", pending.RequesterLinear)
 		}
 		description += fmt.Sprintf("\n\n---\n\n**📌 Telegram Source**\n"+
 			"- **Reporter:** %s\n"+

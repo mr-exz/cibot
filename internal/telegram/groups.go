@@ -3,11 +3,11 @@ package telegram
 import (
 	"context"
 	"fmt"
+	tgbot "github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 	"log"
 	"strconv"
 	"strings"
-	tgbot "github.com/go-telegram/bot"
-	"github.com/go-telegram/bot/models"
 )
 
 func (h *Handler) handleGroups(ctx context.Context, b *tgbot.Bot, msg *models.Message) {

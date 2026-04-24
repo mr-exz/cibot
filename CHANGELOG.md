@@ -2,7 +2,11 @@
 
 ## [0.0.56]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- Linear issue description: reporter's Telegram username is now rendered as a clickable link (`[Name](https://t.me/username)`) instead of plain text with `@`; Linear username no longer has a leading `@`
+
+### Fixed
+- `/ticket` interactive (non-reply) flow: after priority selection the inline keyboard was not removed when editing the message to the title prompt — Telegram keeps the old keyboard when `reply_markup` is omitted, so the priority buttons (including ❌ Cancel) remained visible; clicking Cancel at this point deleted the session and silently cancelled the flow; fixed by explicitly setting an empty `InlineKeyboardMarkup` when transitioning to the title step
 
 
 ## [0.0.55]

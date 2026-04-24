@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	pskzdns "github.com/mr-exz/pskz-dns-api"

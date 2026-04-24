@@ -24,7 +24,6 @@ type commandDef struct {
 	Handler   cmdHandler
 }
 
-
 // registerCommands returns the full command list. Adding a command here is
 // the only thing needed — dispatch and /help are both derived from this list.
 func (h *Handler) registerCommands() []commandDef {

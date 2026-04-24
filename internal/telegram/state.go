@@ -16,17 +16,17 @@ const (
 type AdminCmd string
 
 const (
-	AdminCmdAddCategory   AdminCmd = "addcategory"
-	AdminCmdAddType       AdminCmd = "addtype"
-	AdminCmdAddPerson     AdminCmd = "addperson"
-	AdminCmdSetRotation   AdminCmd = "setrotation"
-	AdminCmdSetWorkHours  AdminCmd = "setworkhours"
-	AdminCmdAddTopic      AdminCmd = "addtopic"
-	AdminCmdSetLabel      AdminCmd = "setlabel"
-	AdminCmdCloneCategory AdminCmd = "clonecategory"
-	AdminCmdOffboard             AdminCmd = "offboard"
-	AdminCmdDNS                  AdminCmd = "dns"
-	AdminCmdAddPersonToCategory  AdminCmd = "addpersontocategory"
+	AdminCmdAddCategory         AdminCmd = "addcategory"
+	AdminCmdAddType             AdminCmd = "addtype"
+	AdminCmdAddPerson           AdminCmd = "addperson"
+	AdminCmdSetRotation         AdminCmd = "setrotation"
+	AdminCmdSetWorkHours        AdminCmd = "setworkhours"
+	AdminCmdAddTopic            AdminCmd = "addtopic"
+	AdminCmdSetLabel            AdminCmd = "setlabel"
+	AdminCmdCloneCategory       AdminCmd = "clonecategory"
+	AdminCmdOffboard            AdminCmd = "offboard"
+	AdminCmdDNS                 AdminCmd = "dns"
+	AdminCmdAddPersonToCategory AdminCmd = "addpersontocategory"
 )
 
 // Step constants for the multi-step issue creation flow
