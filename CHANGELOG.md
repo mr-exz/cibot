@@ -2,7 +2,18 @@
 
 ## [0.0.55]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- Linear issue description now includes the reporter's Linear username (e.g. `John Doe (@tg) / Linear: @john`) when their account is linked via `/mylinear`, making the ticket originator visible in Linear
+
+### Changed
+- `/ticket` and standalone `/ticket` no longer block the flow when no Linear account is linked — the category keyboard is shown immediately with a warning: "Your Telegram account is not linked to Linear. Use /mylinear to link it."
+- Linear issue labels now include the priority name (`Urgent`, `High`, `Medium`, `Low`) in addition to category and type
+
+### Fixed
+- `/ticket` standalone (non-reply) interactive flow now correctly shows the title and description prompts after priority selection — `handleCategoryCallback` and `handleRequestTypeCallback` were missing step guards, allowing Telegram's stale callback replay to reset the session state back to an earlier step and skip the title/description steps
+- `/oncall` work hours are now converted from the person's timezone to the group's configured timezone before display (e.g. `08:00-17:00 +03:00` shown as `10:00-19:00 +05:00` in a group set to `+05:00`); group timezone falls back to `UTC` when not configured
+- `/rotation` work hours are now converted to the timezone of the group the category belongs to, using a per-chatID cache to avoid redundant DB lookups; global categories fall back to `UTC`
+- `/addcategory` categories created for groups with no registered topics were incorrectly saved as global (visible in all groups) instead of being scoped to the selected group — `addCategoryNow` only set `chatID` when `ThreadID != 0`, so the no-topic path always produced `chatID=nil`; fixed by keying off `TargetGroupChatID` instead; success message now correctly says "for this group" rather than "globally" in this case
 
 
 ## [0.0.54]

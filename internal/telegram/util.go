@@ -26,6 +26,47 @@ func parseLocation(tz string) (*time.Location, error) {
 	return storage.ParseTimezone(tz)
 }
 
+// convertWorkHours converts a "HH:MM-HH:MM" work hours string from fromTZ to toTZ.
+// Returns the original string unchanged if either timezone is empty or unparseable.
+func convertWorkHours(hours, fromTZ, toTZ string) string {
+	if hours == "" || fromTZ == "" || toTZ == "" {
+		return hours
+	}
+	fromLoc, err := parseLocation(fromTZ)
+	if err != nil {
+		return hours
+	}
+	toLoc, err := parseLocation(toTZ)
+	if err != nil {
+		return hours
+	}
+	parts := strings.SplitN(hours, "-", 2)
+	if len(parts) != 2 {
+		return hours
+	}
+	today := time.Now()
+	parseAt := func(t string) (time.Time, bool) {
+		tp := strings.Split(strings.TrimSpace(t), ":")
+		if len(tp) != 2 {
+			return time.Time{}, false
+		}
+		h, e1 := strconv.Atoi(tp[0])
+		m, e2 := strconv.Atoi(tp[1])
+		if e1 != nil || e2 != nil {
+			return time.Time{}, false
+		}
+		return time.Date(today.Year(), today.Month(), today.Day(), h, m, 0, 0, fromLoc), true
+	}
+	start, ok1 := parseAt(parts[0])
+	end, ok2 := parseAt(parts[1])
+	if !ok1 || !ok2 {
+		return hours
+	}
+	s := start.In(toLoc)
+	e := end.In(toLoc)
+	return fmt.Sprintf("%02d:%02d-%02d:%02d", s.Hour(), s.Minute(), e.Hour(), e.Minute())
+}
+
 // ButtonItem represents a button with label and callback data
 type ButtonItem struct {
 	Label string
@@ -97,6 +138,22 @@ func priorityLabel(p int) string {
 		return "🔵 P3 — later"
 	default:
 		return "—"
+	}
+}
+
+// priorityName returns a clean Linear label name for a priority value.
+func priorityName(p int) string {
+	switch p {
+	case 1:
+		return "Urgent"
+	case 2:
+		return "High"
+	case 3:
+		return "Medium"
+	case 4:
+		return "Low"
+	default:
+		return ""
 	}
 }
 

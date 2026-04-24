@@ -24,6 +24,12 @@ func (h *Handler) handleOnCall(ctx context.Context, b *tgbot.Bot, msg *models.Me
 	}
 
 	now := time.Now()
+
+	groupTZ := "UTC"
+	if tz, err := h.storage.GetGroupTimezone(ctx, msg.Chat.ID); err == nil && tz != "" {
+		groupTZ = tz
+	}
+
 	var sb strings.Builder
 	sb.WriteString("On-duty support:\n\n")
 
@@ -55,11 +61,8 @@ func (h *Handler) handleOnCall(ctx context.Context, b *tgbot.Bot, msg *models.Me
 			line += "offline " + indicator
 		}
 		if person.WorkHours != "" {
-			tz := person.Timezone
-			if tz == "" {
-				tz = "UTC"
-			}
-			line += " (hours: " + person.WorkHours + " " + tz + ")"
+			displayHours := convertWorkHours(person.WorkHours, person.Timezone, groupTZ)
+			line += " (hours: " + displayHours + " " + groupTZ + ")"
 		}
 		sb.WriteString(line + "\n")
 

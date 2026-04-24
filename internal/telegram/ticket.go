@@ -70,8 +70,14 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 
 	linearUsername, _ := h.storage.GetUserLinearUsername(ctx, msg.From.ID)
 
+	text := "🗂️ Select category for this ticket:"
+	if linearUsername == "" {
+		text = "⚠️ Your Telegram account is not linked to Linear. Use /mylinear to link it.\n\n" + text
+	}
+
 	session := &pendingSession{
 		Flow:             FlowTicket,
+		Step:             StepCategory,
 		UserID:           msg.From.ID,
 		ChatID:           msg.Chat.ID,
 		ThreadID:         msg.MessageThreadID,
@@ -82,25 +88,16 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		MediaLinks:       mediaLinks,
 		ReporterName:     reporterName,
 		ReporterUsername: reporterUsername,
+		RequesterLinear:  linearUsername,
 	}
 
 	var sentMsg *models.Message
-	if linearUsername == "" {
-		session.Step = StepLinearAccount
-		sentMsg, err = b.SendMessage(ctx, &tgbot.SendMessageParams{
-			ChatID:          msg.Chat.ID,
-			Text:            "👤 Please enter your Linear username to link your account:",
-			MessageThreadID: msg.MessageThreadID,
-		})
-	} else {
-		session.Step = StepCategory
-		sentMsg, err = b.SendMessage(ctx, &tgbot.SendMessageParams{
-			ChatID:          msg.Chat.ID,
-			Text:            "🗂️ Select category for this ticket:",
-			ReplyMarkup:     buildCategoryKeyboard(categories),
-			MessageThreadID: msg.MessageThreadID,
-		})
-	}
+	sentMsg, err = b.SendMessage(ctx, &tgbot.SendMessageParams{
+		ChatID:          msg.Chat.ID,
+		Text:            text,
+		ReplyMarkup:     buildCategoryKeyboard(categories),
+		MessageThreadID: msg.MessageThreadID,
+	})
 	if err != nil {
 		log.Printf("❌ Failed to send message: %v\n", err)
 		return
@@ -179,6 +176,9 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 	if pending.ReporterUsername != "" {
 		reporter = fmt.Sprintf("%s (@%s)", pending.ReporterName, pending.ReporterUsername)
 	}
+	if pending.RequesterLinear != "" {
+		reporter += fmt.Sprintf(" / Linear: @%s", pending.RequesterLinear)
+	}
 
 	description := fmt.Sprintf("**📌 Telegram Source**\n"+
 		"- **Reporter:** %s\n"+
@@ -219,7 +219,7 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 		description += "\n\n⚠️ **Note:** Assigned person is currently outside working hours."
 	}
 
-	url, err := h.linear.CreateIssue(ctx, title, description, pending.TeamKey, assignee, []string{pending.CategoryName, pending.TypeName}, pending.Priority)
+	url, err := h.linear.CreateIssue(ctx, title, description, pending.TeamKey, assignee, []string{pending.CategoryName, pending.TypeName, priorityName(pending.Priority)}, pending.Priority)
 	if err != nil {
 		log.Printf("❌ Failed to create Linear issue: %v\n", err)
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{

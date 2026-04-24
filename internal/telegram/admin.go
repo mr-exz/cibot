@@ -542,6 +542,23 @@ func (h *Handler) handleRotation(ctx context.Context, b *tgbot.Bot, msg *models.
 		return
 	}
 
+	// Cache group timezones to avoid repeated DB lookups.
+	groupTZCache := map[int64]string{}
+	getGroupTZ := func(chatID *int64) string {
+		if chatID == nil {
+			return "UTC"
+		}
+		if tz, ok := groupTZCache[*chatID]; ok {
+			return tz
+		}
+		tz, _ := h.storage.GetGroupTimezone(ctx, *chatID)
+		if tz == "" {
+			tz = "UTC"
+		}
+		groupTZCache[*chatID] = tz
+		return tz
+	}
+
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Rotation overview — %s\n", now.Format("Mon 2 Jan")))
 
@@ -550,6 +567,7 @@ func (h *Handler) handleRotation(ctx context.Context, b *tgbot.Bot, msg *models.
 
 		// Scope header
 		cat := r.Category
+		groupTZ := getGroupTZ(cat.ChatID)
 		if cat.ChatID == nil {
 			sb.WriteString("[Global]\n")
 		} else {
@@ -575,12 +593,9 @@ func (h *Handler) handleRotation(ctx context.Context, b *tgbot.Bot, msg *models.
 		sb.WriteString(fmt.Sprintf("  On duty: %s (@%s) %s\n", p.Name, p.TelegramUsername, dutyIndicator))
 		sb.WriteString(fmt.Sprintf("  Linear: @%s\n", p.LinearUsername))
 
-		tz := p.Timezone
-		if tz == "" {
-			tz = "UTC"
-		}
 		if p.WorkHours != "" {
-			sb.WriteString(fmt.Sprintf("  Hours: %s %s | Days: %s\n", p.WorkHours, tz, p.WorkDays))
+			displayHours := convertWorkHours(p.WorkHours, p.Timezone, groupTZ)
+			sb.WriteString(fmt.Sprintf("  Hours: %s %s | Days: %s\n", displayHours, groupTZ, p.WorkDays))
 		}
 
 		// Full team

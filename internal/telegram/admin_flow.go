@@ -112,14 +112,12 @@ func (h *Handler) addCategoryNow(ctx context.Context, b *tgbot.Bot, userID int64
 
 	var chatID *int64
 	var threadID *int
-	if admin.ThreadID != 0 {
-		// Use TargetGroupChatID if set (DM flow), otherwise ChatID (in-group flow)
+	if admin.TargetGroupChatID != 0 {
 		targetChatID := admin.TargetGroupChatID
-		if targetChatID == 0 {
-			targetChatID = admin.ChatID
-		}
 		chatID = &targetChatID
-		threadID = &admin.ThreadID
+		if admin.ThreadID != 0 {
+			threadID = &admin.ThreadID
+		}
 	}
 
 	catID, err := h.storage.AddCategoryWithTopic(ctx, admin.CategoryName, admin.TypeName, admin.TeamKey, chatID, threadID)
@@ -140,6 +138,8 @@ func (h *Handler) addCategoryNow(ctx context.Context, b *tgbot.Bot, userID int64
 	var scopeMsg string
 	if admin.ThreadID != 0 {
 		scopeMsg = " for this topic"
+	} else if admin.TargetGroupChatID != 0 {
+		scopeMsg = " for this group"
 	} else {
 		scopeMsg = " globally"
 	}

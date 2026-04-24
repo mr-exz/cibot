@@ -123,6 +123,7 @@ type pendingSession struct {
 	TicketMsgDate    time.Time
 	ReporterUsername string
 	ReporterName     string
+	RequesterLinear  string // Linear username of the person who ran /ticket; empty if not linked
 }
 
 // pendingAdminSession represents an in-progress admin configuration session
