@@ -2,7 +2,8 @@
 
 ## [0.0.52]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/oncall` Ping button is now single-use: clicking it edits the original message to remove the keyboard and append "Pinged [user] by [clicker] at HH:MM", then sends a separate `@username` message to trigger the Telegram mention notification
 
 
 ## [0.0.51]

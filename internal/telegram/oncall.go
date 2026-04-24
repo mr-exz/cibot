@@ -98,6 +98,20 @@ func (h *Handler) handlePingCallback(ctx context.Context, b *tgbot.Bot, update *
 
 	chatID := query.Message.Message.Chat.ID
 	threadID := query.Message.Message.MessageThreadID
+	msgID := query.Message.Message.ID
+
+	clicker := query.From.Username
+	if clicker == "" {
+		clicker = query.From.FirstName
+	}
+	pingNote := fmt.Sprintf("\n\nPinged %s by %s at %s", username, clicker, time.Now().Format("15:04"))
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      chatID,
+		MessageID:   msgID,
+		Text:        query.Message.Message.Text + pingNote,
+		ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: [][]models.InlineKeyboardButton{}},
+	})
+
 	params := &tgbot.SendMessageParams{
 		ChatID: chatID,
 		Text:   "@" + username,
