@@ -2,7 +2,8 @@
 
 ## [0.0.60]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- `/ticket` standalone (non-reply) flow now correctly asks for a description before showing buttons in all group types — previous fixes in 0.0.57–0.0.59 introduced and resolved forum/topic-group specific regressions; the flow is now stable: description prompt → category/type/priority buttons → issue created with auto-generated title
 
 
 ## [0.0.59]

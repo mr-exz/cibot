@@ -42,8 +42,8 @@ func (h *Handler) registerCommands() []commandDef {
 		},
 		{
 			Name:      "ticket",
-			Desc:      "Create a ticket; reply to a message to use it as source, or run standalone for guided flow",
-			GroupDesc: "Create a ticket — reply to any message to open it as a ticket",
+			Desc:      "Create a ticket — reply to a message to use it as the source, or run standalone to describe your issue and pick category/type/priority",
+			GroupDesc: "Create a ticket — reply to a message to open it, or run standalone to describe your issue",
 			Group:     "Support",
 			Handler:   h.handleTicketStart,
 		},
