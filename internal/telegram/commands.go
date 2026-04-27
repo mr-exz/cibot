@@ -42,10 +42,17 @@ func (h *Handler) registerCommands() []commandDef {
 		},
 		{
 			Name:      "ticket",
-			Desc:      "Create a ticket — reply to a message to use it as the source, or run standalone to describe your issue and pick category/type/priority",
-			GroupDesc: "Create a ticket — reply to a message to open it, or run standalone to describe your issue",
+			Desc:      "Create a ticket from a message — must be used as a reply",
+			GroupDesc: "Create a ticket — reply to a message to open it",
 			Group:     "Support",
 			Handler:   h.handleTicketStart,
+		},
+		{
+			Name:      "ticket_manual",
+			Desc:      "Create a ticket by describing the issue yourself (interactive)",
+			GroupDesc: "Create a ticket by describing the issue yourself",
+			Group:     "Support",
+			Handler:   h.handleSupportStart,
 		},
 		{
 			Name:    "mylinear",

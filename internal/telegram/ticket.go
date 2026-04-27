@@ -11,19 +11,19 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
-// handleTicketStart initiates the /ticket flow. If msg is a reply, the replied-to
-// message is used as the ticket source. Otherwise it falls back to the support flow.
+// handleTicketStart initiates the /ticket flow. msg must be a reply to an existing
+// message — that message is used as the ticket source. Returns an error otherwise.
 func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	if msg.ReplyToMessage == nil {
-		h.handleSupportStart(ctx, b, msg)
+		h.sendMessage(ctx, b, msg, "⚠️ /ticket requires a reply. Reply to a message to create a ticket from it, or use /ticket_manual to describe the issue yourself.")
 		return
 	}
 
 	// In forum/topic groups every message implicitly "replies" to the topic header
 	// (the service message that created the topic), whose ID equals the thread ID.
-	// This is not a real user reply — fall back to the standalone flow.
+	// This is not a real user reply — show an error.
 	if msg.MessageThreadID != 0 && msg.ReplyToMessage.ID == msg.MessageThreadID {
-		h.handleSupportStart(ctx, b, msg)
+		h.sendMessage(ctx, b, msg, "⚠️ /ticket requires a reply to a user message. Use /ticket_manual to describe the issue yourself.")
 		return
 	}
 

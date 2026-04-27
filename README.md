@@ -4,7 +4,7 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 
 ## Features
 
-- **Ticket creation** (`/ticket`) — reply to any message to create a Linear issue with reporter, message body, media, and source link auto-captured; or run standalone for a guided flow
+- **Ticket creation** — `/ticket` (reply to a message) captures reporter, message body, media, and source link automatically; `/ticket_manual` for a guided self-service flow when there is no source message
 - **Automatic support rotation** (daily/weekly) with on-duty assignment and work-hours awareness
 - **On-call visibility** (`/oncall`) — any group member can see who is on duty right now per category, with real-time availability status
 - **Support person status** (`/status`) — support persons set lunch/brb/away status via inline buttons; member tag updated automatically; shown in ticket confirmations
@@ -43,8 +43,8 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 │   │   ├── telegram.go   # Handler wiring, group/topic cache, session reaper
 │   │   ├── commands.go   # Command registry (single source of truth for dispatch + help)
 │   │   ├── state.go      # Session state structures
-│   │   ├── support.go    # Self-service /support flow
-│   │   ├── ticket.go     # Support-assisted /ticket flow
+│   │   ├── support.go    # /ticket_manual interactive flow
+│   │   ├── ticket.go     # /ticket reply-based flow
 │   │   ├── admin.go      # Admin command entry points
 │   │   ├── admin_flow.go # Admin multi-step flow handlers
 │   │   ├── dns.go        # DNS management flow (experimental)
@@ -74,11 +74,10 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 ### User commands
 
 - `/start` — Show available commands
-- `/ticket` — Create a support ticket
-  - Reply to any message with `/ticket` to use it as the ticket source (category → type → priority → done)
-  - Run `/ticket` standalone for a guided self-service flow (category → type → priority → title → description)
+- `/ticket` — Create a ticket from an existing message — must be used as a reply
   - Reporter, message body, media attachments, and source link captured automatically
   - Auto-assigned to the on-duty support person; assignee status shown if they are on lunch/brb/away
+- `/ticket_manual` — Create a ticket by describing the issue yourself (guided interactive flow: description → category → type → priority)
 - `/oncall` — Show who is on support duty right now per category (name, @username, availability status)
 - `/status` — Set your support status via inline buttons: Lunch / BRB / Away / Back
   - Sets your Telegram member tag in all approved groups; clearing status removes the tag
@@ -130,4 +129,4 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
    - **Manage Tags** — required for `/setlabel` (set member tags via Bot API 9.5)
 6. DM the bot with `/groups` to approve the groups where it should operate
 7. Use `/addtopic`, `/addcategory`, `/addtype`, `/persons` to configure support (all via DM or group)
-8. Users can now use `/ticket` to create issues; `/oncall` to see who is on duty
+8. Users can now use `/ticket` (reply to a message) or `/ticket_manual` (describe from scratch) to create issues; `/oncall` to see who is on duty

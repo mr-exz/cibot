@@ -2,7 +2,9 @@
 
 ## [0.0.61]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/ticket` now requires a reply — running it without replying to a message returns an error with a pointer to `/ticket_manual`
+- `/ticket_manual` is a new command for the interactive (guided) flow: describe the issue yourself, then pick category, type, and priority
 
 
 ## [0.0.60]

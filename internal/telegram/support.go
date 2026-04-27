@@ -12,16 +12,9 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
-// handleSupportStart initiates the /support flow, or the /ticket flow if msg is a reply.
+// handleSupportStart initiates the /ticket_manual interactive flow.
 func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
-	// Redirect to ticket flow only for real replies, not the implicit topic-header
-	// reply that Telegram attaches to every message sent in a forum topic.
-	if msg.ReplyToMessage != nil && !(msg.MessageThreadID != 0 && msg.ReplyToMessage.ID == msg.MessageThreadID) {
-		h.handleTicketStart(ctx, b, msg)
-		return
-	}
-
-	log.Printf("✓ Processing /support command from chat_id: %d\n", msg.Chat.ID)
+	log.Printf("✓ Processing /ticket_manual command from chat_id: %d\n", msg.Chat.ID)
 
 	// Load categories from DB (topic-aware: show global + topic-specific categories)
 	categories, err := h.storage.ListCategoriesForContext(ctx, msg.Chat.ID, msg.MessageThreadID)
