@@ -396,11 +396,18 @@ func (c *Client) createLabel(ctx context.Context, labelName, teamID string) (str
 	return labelID, nil
 }
 
-func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, assigneeUsername string, labels []string, priority int) (string, error) {
+// IssueResult holds the response fields from a successful issue creation.
+type IssueResult struct {
+	ID         string // internal UUID, used for API calls (e.g. CreateComment)
+	Identifier string // display ID like "ENG-123", used for naming
+	URL        string
+}
+
+func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, assigneeUsername string, labels []string, priority int) (IssueResult, error) {
 	// Resolve team key to UUID
 	teamID, err := c.resolveTeamID(ctx, teamKey)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve team: %w", err)
+		return IssueResult{}, fmt.Errorf("failed to resolve team: %w", err)
 	}
 
 	// Resolve assignee username to user ID (if provided)
@@ -438,6 +445,7 @@ func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, a
 		}) {
 			issue {
 				id
+				identifier
 				url
 			}
 		}
@@ -471,12 +479,12 @@ func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, a
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
+		return IssueResult{}, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.linear.app/graphql", bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return IssueResult{}, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -484,17 +492,17 @@ func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, a
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to send request: %w", err)
+		return IssueResult{}, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+		return IssueResult{}, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Linear API error (status %d): %s", resp.StatusCode, string(respBody))
+		return IssueResult{}, fmt.Errorf("Linear API error (status %d): %s", resp.StatusCode, string(respBody))
 	}
 
 	log.Printf("Linear API response: %s\n", string(respBody))
@@ -503,8 +511,9 @@ func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, a
 		Data struct {
 			IssueCreate struct {
 				Issue struct {
-					ID  string `json:"id"`
-					URL string `json:"url"`
+					ID         string `json:"id"`
+					Identifier string `json:"identifier"`
+					URL        string `json:"url"`
 				} `json:"issue"`
 			} `json:"issueCreate"`
 		} `json:"data"`
@@ -514,16 +523,71 @@ func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, a
 	}
 
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
+		return IssueResult{}, fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if len(result.Errors) > 0 {
-		return "", fmt.Errorf("Linear API error: %s", result.Errors[0].Message)
+		return IssueResult{}, fmt.Errorf("Linear API error: %s", result.Errors[0].Message)
 	}
 
 	if result.Data.IssueCreate.Issue.URL == "" {
-		return "", fmt.Errorf("failed to create issue: no URL in response")
+		return IssueResult{}, fmt.Errorf("failed to create issue: no URL in response")
 	}
 
-	return result.Data.IssueCreate.Issue.URL, nil
+	return IssueResult{
+		ID:         result.Data.IssueCreate.Issue.ID,
+		Identifier: result.Data.IssueCreate.Issue.Identifier,
+		URL:        result.Data.IssueCreate.Issue.URL,
+	}, nil
+}
+
+// CreateComment posts a markdown comment on a Linear issue.
+func (c *Client) CreateComment(ctx context.Context, issueID, body string) error {
+	payload := map[string]interface{}{
+		"query": `mutation CommentCreate($issueId: String!, $body: String!) {
+			commentCreate(input: { issueId: $issueId, body: $body }) {
+				comment { id }
+			}
+		}`,
+		"variables": map[string]interface{}{
+			"issueId": issueID,
+			"body":    body,
+		},
+	}
+
+	reqBody, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal comment request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.linear.app/graphql", bytes.NewReader(reqBody))
+	if err != nil {
+		return fmt.Errorf("failed to create comment request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", c.apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send comment request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read comment response: %w", err)
+	}
+
+	var result struct {
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return fmt.Errorf("failed to parse comment response: %w", err)
+	}
+	if len(result.Errors) > 0 {
+		return fmt.Errorf("Linear API error: %s", result.Errors[0].Message)
+	}
+	return nil
 }

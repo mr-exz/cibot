@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -15,6 +16,9 @@ type Config struct {
 	WebPort        string
 	WebDomain      string // if set, enables Let's Encrypt TLS (listens on :443 + :80 redirect)
 	WebCertDir     string // directory to cache Let's Encrypt certificates
+
+	// Tech thread feature
+	TechGroupID int64 // Telegram group ID where /thread topics are created
 
 	// DNS management (experimental)
 	DNSEmail    string
@@ -60,6 +64,9 @@ func Load() *Config {
 		cfg.WebCertDir = "/data/autocert"
 	}
 
+	if v := os.Getenv("TECH_GROUP_ID"); v != "" {
+		fmt.Sscanf(v, "%d", &cfg.TechGroupID)
+	}
 	cfg.DNSEmail = os.Getenv("DNS_EMAIL")
 	cfg.DNSPassword = os.Getenv("DNS_PASSWORD")
 

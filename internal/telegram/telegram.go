@@ -32,6 +32,7 @@ type Handler struct {
 	topics      map[int64]map[int]string // chat_id -> (thread_id -> topic_name)
 	groups      map[int64]string         // chat_id -> group title (discovered from messages)
 	knownUsers  map[int64]string         // user_id -> "username\x00first\x00last" fingerprint; skip DB write if unchanged
+	techThreads map[string]*storage.TechThread // "chatID:threadID" -> open thread
 	cmdRegistry []commandDef
 	cmdHandlers map[string]cmdHandler
 	dns         *pskzdns.Client // experimental DNS management
@@ -48,7 +49,21 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 		topics:      make(map[int64]map[int]string),
 		groups:      make(map[int64]string),
 		knownUsers:  make(map[int64]string),
+		techThreads: make(map[string]*storage.TechThread),
 		cmdHandlers: make(map[string]cmdHandler),
+	}
+
+	// Load open tech threads into memory so message tracking works after restart
+	if openThreads, err := db.GetOpenTechThreads(ctx); err != nil {
+		log.Printf("⚠️  Failed to load open tech threads: %v", err)
+	} else {
+		for i := range openThreads {
+			t := &openThreads[i]
+			h.techThreads[techThreadKey(t.TechChatID, t.TechThreadID)] = t
+		}
+		if len(openThreads) > 0 {
+			log.Printf("✓ Loaded %d open tech threads", len(openThreads))
+		}
 	}
 
 	// Initialize DNS client if credentials are configured (experimental)
@@ -235,6 +250,16 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 					log.Printf("⚠️  UpsertUserMeta: %v", err)
 				}
 			}()
+		}
+	}
+
+	// Append to tech thread file if this message is in a tracked open thread
+	if msg.MessageThreadID != 0 {
+		h.mu.Lock()
+		tt := h.techThreads[techThreadKey(msg.Chat.ID, msg.MessageThreadID)]
+		h.mu.Unlock()
+		if tt != nil {
+			appendToThreadFile(tt.FilePath, msg)
 		}
 	}
 

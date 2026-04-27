@@ -152,6 +152,20 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler:   h.handleDNS,
 		},
 		{
+			Name:      "thread",
+			Desc:      "Open a technical thread — reply to a message to create a Linear issue and a dedicated topic",
+			Group:     "Admin",
+			AdminOnly: true,
+			Handler:   h.handleThread,
+		},
+		{
+			Name:      "close",
+			Desc:      "Close the current tech thread and dump messages to Linear (use inside a thread topic)",
+			Group:     "Admin",
+			AdminOnly: true,
+			Handler:   h.handleCloseThread,
+		},
+		{
 			Name:      "addtopic",
 			Desc:      "Register a forum topic",
 			Group:     "Topics",

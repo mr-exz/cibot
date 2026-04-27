@@ -2,7 +2,15 @@
 
 ## [0.0.62]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/thread` command — reply to any message to create a Linear issue and a dedicated forum topic in the configured tech group (`TECH_GROUP_ID`); the topic is named after the Linear identifier (e.g. `ENG-123: title`); the original message is forwarded into the topic automatically
+- `/close` command — run inside a tech thread topic to dump all logged messages as a single Linear comment, close the Telegram topic, and mark the thread closed; the per-thread file is deleted after a successful dump
+- Per-thread message log files — every message posted in an open tech thread topic is appended to a plain-text file named after the Linear identifier (e.g. `ENG-123.txt`) stored alongside `messages.csv`
+- Tech threads survive bot restarts — open threads are loaded from DB on startup so message tracking resumes automatically
+- New env var: `TECH_GROUP_ID`; Linear team key is taken from the selected category (same as `/ticket`)
+
+### Changed
+- `CreateIssue` (Linear client) now returns `id`, `identifier`, and `url` instead of just `url`; `identifier` (e.g. `ENG-123`) is used for topic naming and file naming
 
 
 ## [0.0.61]

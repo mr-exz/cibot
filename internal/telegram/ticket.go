@@ -227,7 +227,7 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 		description += "\n\n⚠️ **Note:** Assigned person is currently outside working hours."
 	}
 
-	url, err := h.linear.CreateIssue(ctx, title, description, pending.TeamKey, assignee, []string{pending.CategoryName, pending.TypeName, priorityName(pending.Priority)}, pending.Priority)
+	issue, err := h.linear.CreateIssue(ctx, title, description, pending.TeamKey, assignee, []string{pending.CategoryName, pending.TypeName, priorityName(pending.Priority)}, pending.Priority)
 	if err != nil {
 		log.Printf("❌ Failed to create Linear issue: %v\n", err)
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
@@ -237,6 +237,7 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 		})
 		return
 	}
+	url := issue.URL
 
 	h.mu.Lock()
 	delete(h.states, stateKey{UserID: pending.UserID})

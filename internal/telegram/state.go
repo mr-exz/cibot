@@ -10,6 +10,7 @@ const (
 	FlowTicket       FlowType = "ticket"        // reply-based /ticket flow
 	FlowAdmin        FlowType = "admin"         // admin configuration flow
 	FlowUpdateLinear FlowType = "update_linear" // /mylinear account update
+	FlowThread       FlowType = "thread"        // /thread: create Linear issue + tech topic
 )
 
 // AdminCmd represents a specific admin command
@@ -122,10 +123,11 @@ type pendingSession struct {
 	SupportMsgID int
 	ChatTitle    string
 
-	// ticket-specific fields
+	// ticket-specific fields (also reused by FlowThread for the replied-to message)
 	TicketMsgLink    string
 	TicketMsgBody    string
 	TicketMsgDate    time.Time
+	SourceMsgID      int    // original replied-to message ID; used by FlowThread to forward it
 	ReporterUsername string
 	ReporterName     string
 	RequesterLinear  string // Linear username of the person who ran /ticket; empty if not linked

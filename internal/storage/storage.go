@@ -916,6 +916,87 @@ func (d *DB) SetUserLinearUsername(ctx context.Context, userID int64, linearUser
 	return err
 }
 
+// === Tech Threads ===
+
+type TechThread struct {
+	ID              int64
+	LinearIssueID   string
+	LinearIssueURL  string
+	TechChatID      int64
+	TechThreadID    int
+	SourceChatID    int64
+	SourceThreadID  int
+	FilePath        string
+	CreatedByUserID int64
+	CreatedAt       time.Time
+	ClosedAt        *time.Time
+}
+
+func (d *DB) CreateTechThread(ctx context.Context, t *TechThread) (int64, error) {
+	result, err := d.db.ExecContext(ctx,
+		`INSERT INTO tech_threads
+		 (linear_issue_id, linear_issue_url, tech_chat_id, tech_thread_id,
+		  source_chat_id, source_thread_id, file_path, created_by_user_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.LinearIssueID, t.LinearIssueURL, t.TechChatID, t.TechThreadID,
+		t.SourceChatID, t.SourceThreadID, t.FilePath, t.CreatedByUserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
+}
+
+func (d *DB) GetTechThreadByTopic(ctx context.Context, chatID int64, threadID int) (*TechThread, error) {
+	var t TechThread
+	err := d.db.QueryRowContext(ctx,
+		`SELECT id, linear_issue_id, linear_issue_url, tech_chat_id, tech_thread_id,
+		        source_chat_id, source_thread_id, file_path, created_by_user_id, created_at, closed_at
+		 FROM tech_threads WHERE tech_chat_id = ? AND tech_thread_id = ?`,
+		chatID, threadID).Scan(
+		&t.ID, &t.LinearIssueID, &t.LinearIssueURL,
+		&t.TechChatID, &t.TechThreadID,
+		&t.SourceChatID, &t.SourceThreadID,
+		&t.FilePath, &t.CreatedByUserID, &t.CreatedAt, &t.ClosedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+func (d *DB) CloseTechThread(ctx context.Context, id int64) error {
+	_, err := d.db.ExecContext(ctx,
+		"UPDATE tech_threads SET closed_at = datetime('now') WHERE id = ?", id)
+	return err
+}
+
+func (d *DB) GetOpenTechThreads(ctx context.Context) ([]TechThread, error) {
+	rows, err := d.db.QueryContext(ctx,
+		`SELECT id, linear_issue_id, linear_issue_url, tech_chat_id, tech_thread_id,
+		        source_chat_id, source_thread_id, file_path, created_by_user_id, created_at, closed_at
+		 FROM tech_threads WHERE closed_at IS NULL`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var threads []TechThread
+	for rows.Next() {
+		var t TechThread
+		if err := rows.Scan(
+			&t.ID, &t.LinearIssueID, &t.LinearIssueURL,
+			&t.TechChatID, &t.TechThreadID,
+			&t.SourceChatID, &t.SourceThreadID,
+			&t.FilePath, &t.CreatedByUserID, &t.CreatedAt, &t.ClosedAt); err != nil {
+			return nil, err
+		}
+		threads = append(threads, t)
+	}
+	return threads, rows.Err()
+}
+
 // === Helper to create initial assignment ===
 
 func (d *DB) CreateInitialAssignment(ctx context.Context, categoryID int64, supportPersonID int64, rotationType string, startDate string) error {
