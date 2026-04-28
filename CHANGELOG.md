@@ -2,7 +2,8 @@
 
 ## [0.0.64]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/thread` confirmation now includes a "Join tech group" button with a permanent invite link so non-members can join directly; link is created once via the Bot API and cached for subsequent threads (bot requires "Invite Users via Link" permission in the tech group)
 
 
 ## [0.0.63]

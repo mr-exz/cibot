@@ -168,17 +168,22 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 	h.mu.Unlock()
 
 	topicLink := telegramTopicLink(h.cfg.TechGroupID, topic.MessageThreadID)
+	inviteLink := h.getTechGroupInviteLink(ctx, b)
+
+	buttons := []models.InlineKeyboardButton{
+		{Text: "Linear: " + issue.Identifier, URL: issue.URL},
+		{Text: "Telegram: " + issue.Identifier, URL: topicLink},
+	}
+	if inviteLink != "" {
+		buttons = append(buttons, models.InlineKeyboardButton{Text: "Join tech group", URL: inviteLink})
+	}
+
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    pending.ChatID,
 		MessageID: pending.MessageID,
 		Text:      "✅ Thread opened!",
 		ReplyMarkup: &models.InlineKeyboardMarkup{
-			InlineKeyboard: [][]models.InlineKeyboardButton{
-				{
-					{Text: "Linear: " + issue.Identifier, URL: issue.URL},
-					{Text: "Telegram: " + issue.Identifier, URL: topicLink},
-				},
-			},
+			InlineKeyboard: [][]models.InlineKeyboardButton{buttons},
 		},
 	})
 	log.Printf("✓ Tech thread created: %s (topic %d in chat %d)", issue.Identifier, topic.MessageThreadID, h.cfg.TechGroupID)
@@ -266,6 +271,31 @@ func (h *Handler) handleCloseThread(ctx context.Context, b *tgbot.Bot, msg *mode
 		Text:            fmt.Sprintf("✅ Thread closed. Messages dumped to Linear: %s", tt.LinearIssueURL),
 	})
 	log.Printf("✓ Tech thread closed: %s (by @%s)", tt.LinearIssueURL, msg.From.Username)
+}
+
+// getTechGroupInviteLink returns a cached permanent invite link for the tech group,
+// creating one via the API on first call.
+func (h *Handler) getTechGroupInviteLink(ctx context.Context, b *tgbot.Bot) string {
+	h.mu.Lock()
+	cached := h.techGroupInviteLink
+	h.mu.Unlock()
+	if cached != "" {
+		return cached
+	}
+
+	link, err := b.CreateChatInviteLink(ctx, &tgbot.CreateChatInviteLinkParams{
+		ChatID: h.cfg.TechGroupID,
+		Name:   "cibot",
+	})
+	if err != nil {
+		log.Printf("⚠️  Failed to create tech group invite link: %v", err)
+		return ""
+	}
+
+	h.mu.Lock()
+	h.techGroupInviteLink = link.InviteLink
+	h.mu.Unlock()
+	return link.InviteLink
 }
 
 // telegramTopicLink builds a t.me deep link to a specific forum topic.
