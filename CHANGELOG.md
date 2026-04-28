@@ -2,8 +2,8 @@
 
 ## [0.0.67]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
-
+### Changed
+- Commands `/thread` and `/close` moved to be available for all
 
 ## [0.0.66]
 
@@ -11,26 +11,22 @@
 - `/thread` now assigns the on-duty person for the selected category to the Linear issue (same logic as `/ticket`); offline warning shown in confirmation if assignee is outside working hours
 - Tech thread topic message shows on-call person by name without `@` ping, with a Ping button — clicking it appends "Pinged X by Y at HH:MM" to the message and sends a separate `@username` mention to trigger the notification
 
-
 ## [0.0.65]
 
 ### Changed
 - `/thread` now assigns the on-duty person for the selected category to the Linear issue (same logic as `/ticket`); an offline note is appended to the issue description if the assignee is outside working hours
 - `/thread` confirmation text updated to "✅ Thread opened! Continue the discussion in the topic."
 
-
 ## [0.0.64]
 
 ### Changed
 - `/thread` confirmation now includes a "Join tech group" button with a permanent invite link so non-members can join directly; link is created once via the Bot API and cached for subsequent threads (bot requires "Invite Users via Link" permission in the tech group)
-
 
 ## [0.0.63]
 
 ### Changed
 - `/thread` confirmation message now shows two inline URL buttons ("Linear: INFRA-1738" and "Telegram: INFRA-1738") instead of raw URLs
 - Tech thread topic name is now just the Linear identifier (e.g. `INFRA-1738`) with no title suffix
-
 
 ## [0.0.62]
 
@@ -44,37 +40,31 @@
 ### Changed
 - `CreateIssue` (Linear client) now returns `id`, `identifier`, and `url` instead of just `url`; `identifier` (e.g. `ENG-123`) is used for topic naming and file naming
 
-
 ## [0.0.61]
 
 ### Changed
 - `/ticket` now requires a reply — running it without replying to a message returns an error with a pointer to `/ticket_manual`
 - `/ticket_manual` is a new command for the interactive (guided) flow: describe the issue yourself, then pick category, type, and priority
 
-
 ## [0.0.60]
 
 ### Fixed
 - `/ticket` standalone (non-reply) flow now correctly asks for a description before showing buttons in all group types — previous fixes in 0.0.57–0.0.59 introduced and resolved forum/topic-group specific regressions; the flow is now stable: description prompt → category/type/priority buttons → issue created with auto-generated title
-
 
 ## [0.0.59]
 
 ### Fixed
 - `/ticket` (and `/support`) standalone flow in forum/topic groups no longer silently ignores the user's description — the topic-header guard added in 0.0.58 was only applied in `handleTicketStart`, so when it fell back to `handleSupportStart`, `handleSupportStart` saw a non-nil `reply_to_message` and called `handleTicketStart` again, creating infinite mutual recursion; the session was never stored, so the bot received the user's text but had no state to match it against; fixed by applying the same topic-header check in `handleSupportStart` before it redirects to `handleTicketStart`
 
-
 ## [0.0.58]
 
 ### Fixed
 - `/ticket` standalone (non-reply) in forum/topic groups now correctly asks for a description instead of immediately showing category buttons — Telegram implicitly sets `reply_to_message` to the topic header on every message in a topic, so the bot was treating every standalone `/ticket` in a topic as a reply; fixed by detecting the topic header (its message ID equals `message_thread_id`) and falling back to the standalone flow
 
-
 ## [0.0.57]
 
 ### Changed
 - `/ticket` standalone (non-reply) flow now asks for a description first, then shows category/type/priority buttons — previously the flow started with buttons and ended with title and description prompts; title is now auto-generated from the first 5 words of the description (matching the reply-based `/ticket` behaviour)
-
 
 ## [0.0.56]
 
@@ -83,7 +73,6 @@
 
 ### Fixed
 - `/ticket` interactive (non-reply) flow: after priority selection the inline keyboard was not removed when editing the message to the title prompt — Telegram keeps the old keyboard when `reply_markup` is omitted, so the priority buttons (including ❌ Cancel) remained visible; clicking Cancel at this point deleted the session and silently cancelled the flow; fixed by explicitly setting an empty `InlineKeyboardMarkup` when transitioning to the title step
-
 
 ## [0.0.55]
 
@@ -100,12 +89,10 @@
 - `/rotation` work hours are now converted to the timezone of the group the category belongs to, using a per-chatID cache to avoid redundant DB lookups; global categories fall back to `UTC`
 - `/addcategory` categories created for groups with no registered topics were incorrectly saved as global (visible in all groups) instead of being scoped to the selected group — `addCategoryNow` only set `chatID` when `ThreadID != 0`, so the no-topic path always produced `chatID=nil`; fixed by keying off `TargetGroupChatID` instead; success message now correctly says "for this group" rather than "globally" in this case
 
-
 ## [0.0.54]
 
 ### Fixed
 - Group timezone "Set TZ" flow now correctly accepts offset-format timezones (e.g. `+05:00`) — previously `time.LoadLocation` was used for validation and timezone resolution, which only accepts IANA names and silently rejected all offset strings, so the selection was never saved; replaced with a `parseLocation` helper that tries `time.LoadLocation` first and falls back to `storage.ParseTimezone` for offset strings
-
 
 ## [0.0.53]
 
@@ -113,18 +100,15 @@
 - Group timezone setting — `/groups` now shows the configured timezone next to each group name (defaults to `UTC` when not set) and adds a "🕐 Set TZ" button per group that opens a timezone picker populated from existing person schedules plus common presets (`UTC`, `+03:00`, `+04:00`, `+05:00`, `+06:00`); selected timezone is persisted via migration 009
 - `/oncall` Ping time now reflects the group's configured timezone — the ping note shows local time and timezone label (e.g. "Pinged johndoe by alice at 16:35 UTC+5"); falls back to UTC when no group timezone is set
 
-
 ## [0.0.52]
 
 ### Changed
 - `/oncall` Ping button is now single-use: clicking it edits the original message to remove the keyboard and append "Pinged [user] by [clicker] at HH:MM", then sends a separate `@username` message to trigger the Telegram mention notification
 
-
 ## [0.0.51]
 
 ### Changed
 - `/start` help output is now organised by role: "User — Group & DM" lists commands usable in both contexts, "User — DM" lists DM-only user commands, and "Admin" lists all admin commands (visible only to admins) — previously a flat Group/DM split mixed user and admin commands in the same section
-
 
 ## [0.0.50]
 
@@ -136,20 +120,17 @@
 - `/oncall` no longer displays the `@` prefix on usernames in the status text, preventing unintended mention notifications on every `/oncall` call
 - `/start` Group section no longer shows commands that have no group-specific description (e.g. `/start`, `/version`, `/mylinear`); only commands with an explicit `GroupDesc` (`/ticket`, `/oncall`, `/status`) appear in the Group section
 
-
 ## [0.0.49]
 
 ### Changed
 - `/status` now shows the person's current availability status and which categories they are on duty for before the change-status buttons, so support persons can see their duty state at a glance from a DM
 - `/start` now shows context-aware help: in a group only the public Support commands are listed; in a DM the full command list is shown (admin sections visible to admins only)
 
-
 ## [0.0.48]
 
 ### Changed
 - `/rotation` now shows full rotation details for every category: group/topic scope, rotation type (daily/weekly), on-duty person with Linear username, work hours, and timezone, and the full team list with each person's current availability indicator; on-duty person is marked in the team list
 - `/rotation` team list is now always shown regardless of team size — previously hidden when only one person was assigned
-
 
 ## [0.0.47]
 
@@ -163,7 +144,6 @@
 - `/addperson` command — functionality moved into `/persons` (Add person button)
 - `/setworkhours` command — functionality moved into `/persons` person detail screen (Edit schedule button)
 
-
 ## [0.0.46]
 
 ### Added
@@ -173,7 +153,6 @@
 - `/addperson` and `/setworkhours` — schedule picker buttons (timezone, hours, days) now correctly show values entered in previous sessions; previously `INSERT OR IGNORE` silently discarded new timezone/work_hours/work_days when the person already existed in the DB, so those values never reached `GetSupportPersonDefaults` and the picker appeared stuck on old values; changed to `INSERT … ON CONFLICT DO UPDATE` that applies non-empty schedule fields even for existing persons
 - `/oncall` — offline indicator now includes the person's timezone next to their work hours (e.g. `offline 🔴 (hours: 09:00-18:00 +05:00)`) so it is clear which timezone the schedule applies to; falls back to `UTC` when no timezone is set
 
-
 ## [0.0.45]
 
 ### Changed
@@ -181,12 +160,10 @@
 - `/setworkhours` same picker keyboard improvement — after selecting a person, timezone/hours/days steps show the same pickers
 - Day picker always includes three preset buttons (1-5, 1-6, 1-7) in addition to any custom values from DB
 
-
 ## [0.0.44]
 
 ### Fixed
 - `/addperson` — adding a person whose `telegram_username` already exists in another category now reuses the existing record and creates the new assignment instead of failing with a UNIQUE constraint error; same `INSERT OR IGNORE` + SELECT pattern used by `/addtype`
-
 
 ## [0.0.43]
 
@@ -195,7 +172,6 @@
 - Topic picker buttons (used in `/addcategory` topic selection, `/categories` clone and scope flows) now appear in stable alphabetical order for the same reason
 - `/topics` text output now lists groups alphabetically and topics by thread ID within each group
 
-
 ## [0.0.42]
 
 ### Changed
@@ -203,12 +179,10 @@
 - `/addtopic` group selection step now displays `chat_id` in the header after a group is chosen
 - `/addtopic` confirmation message now shows `chat_id`, `thread_id`, and `name` on separate lines instead of a compact summary
 
-
 ## [0.0.41]
 
 ### Fixed
 - `/status back` now clears the member tag in all approved groups (calls `setChatMemberTag` with empty string) instead of restoring a stale label from the unused `user_labels` table
-
 
 ## [0.0.40]
 
@@ -219,7 +193,6 @@
 - Ticket confirmation shows assignee status if set — if the on-duty person is on lunch/brb/away when a ticket is created, their current status is shown in the confirmation message next to their name
 - When status is set, the bot calls `setChatMemberTag` in all approved groups to update the member tag (e.g. "On lunch", "BRB", "Away"); on `/status back`, the stored label (from `/setlabel`) is restored
 
-
 ## [0.0.39]
 
 ### Added
@@ -229,7 +202,6 @@
   - **Add record** — select account, enter domain, name, type (A/AAAA/CNAME/MX/TXT/NS/SRV/CAA), value, TTL; confirm before creating
   - **Delete record** — select account, enter domain, pick record from list; confirm before deleting
   - Uses `github.com/mr-exz/pskz-dns-api` GraphQL client; all operations logged
-
 
 ## [0.0.38]
 
@@ -242,7 +214,6 @@
 ### Changed
 - Port `8000` exposed in `docker-compose.yml` for the web server; configurable via `WEB_PORT` env var
 
-
 ## [0.0.37]
 
 ### Added
@@ -254,14 +225,12 @@
 ### Fixed
 - `/users` detail view always showed "not linked" for Linear — `GetUserByID` was not selecting `linear_username`
 
-
 ## [0.0.36]
 
 ### Changed
 - `/users` list — each user is now a single button; users with a linked Linear account show a 🔷 indicator
 - Tapping a user opens a detail view (edited in-place) showing full name, Telegram username, and Linear account (or "not linked"), with Set Tag, Delete, and Back actions
 - `/start` added to the command registry so it appears in the help output
-
 
 ## [0.0.35]
 
@@ -276,26 +245,22 @@
 ### Changed
 - Text input during an active ticket session is now routed through the pending-session handler for both `FlowTicket` and `FlowSupport`
 
-
 ## [0.0.34]
 
 ### Changed
 - `/support` and `/ticket` merged into a single `/ticket` command — if used as a reply, the replied-to message is used as the ticket source (immediate creation after category/type/priority); if used standalone, the full support flow runs (category → type → priority → title → description)
 - `/support` command removed
 
-
 ## [0.0.33]
 
 ### Reverted
 - `/support` ForceReply approach from 0.0.32 — reverted back to single-message `EditMessageText` flow; the ForceReply UX was disruptive in group chats
-
 
 ## [0.0.32]
 
 ### Fixed
 - `/support` title and description steps now use `ForceReply` messages instead of `EditMessageText`; plain text replies from users in groups were never delivered to the bot when group privacy mode is enabled — only replies to bot messages are guaranteed to arrive regardless of privacy mode
 - Group-level categories (scoped to a group but not a specific topic) were never returned by `ListCategoriesForContext`; the query now includes `chat_id = ? AND thread_id IS NULL` in both the no-topic and topic branches so group-level categories appear in `/support` for all users in that group
-
 
 ## [0.0.31]
 
@@ -307,7 +272,6 @@
 - `msg.From == nil` nil panic on service messages and anonymous admin posts in `handleMessage`
 - `/support` title step error now logged when `EditMessageText` fails silently
 
-
 ## [0.0.30]
 
 ### Changed
@@ -315,36 +279,30 @@
 - Group names are now loaded from DB on cache miss in `getGroupName` so pickers show correct names immediately after bot restart instead of raw IDs
 - Group title is only written to DB when it changes (was written on every message); same change-detection pattern as user metadata
 
-
 ## [0.0.29]
 
 ### Fixed
 - `/addtype` — `AddRequestType` returned a stale connection rowid when the type name already existed (SQLite's `LastInsertId()` after `INSERT OR IGNORE` returns the last rowid of any previous insert on the connection, not zero); always SELECT the id now, so linking an existing type name to a new category works correctly instead of failing with a FOREIGN KEY constraint error
-
 
 ## [0.0.28]
 
 ### Added
 - Priority selection step in `/support` and `/ticket` flows — after request type (or category if no types), a priority keyboard is shown: 🔴 P0 — now, 🟠 P1 — today, 🟡 P2 — week, 🔵 P3 — later; maps to Linear priority values Urgent/High/Medium/Low and is passed in the `issueCreate` mutation
 
-
 ## [0.0.27]
 
 ### Changed
 - `/addtype`, `/addperson`, `/setrotation` — category picker is now hierarchical: global categories shown at the top level; groups with scoped categories appear as navigation buttons; tapping a group shows group-level categories and any topics that have topic-level categories; ⬅️ Back navigates up the tree
-
 
 ## [0.0.26]
 
 ### Fixed
 - `/addcategory` — `EditMessageText` calls that embedded user-provided strings (group name, topic name) with `ParseMode: Markdown` silently failed when names contained `_`, `*`, or `[`; removed `ParseMode` from all category-flow message edits so the UI always updates
 
-
 ## [0.0.25]
 
 ### Fixed
 - `/addcategory` — stale Telegram callbacks (`confirm:global`, `topic:`) arriving after bot restart triggered `addCategoryNow` immediately with empty fields; handlers now only act when session is in the expected `StepAdminCatSelectTopic` step, ignoring out-of-sequence callbacks
-
 
 ## [0.0.24]
 
@@ -355,12 +313,10 @@
 - `/addcategory` — registered topics not shown when running the command from DM after a bot restart; `getAllTopics` now loads directly from DB instead of relying on the in-memory group cache
 - Missing ❌ Cancel button in topic selection and topic-confirm keyboards
 
-
 ## [0.0.23]
 
 ### Added
 - 🗑 Clear tag button next to each user in `/users` — skips label input, goes straight to group selection, and clears the tag via `setChatMemberTag` with an empty string
-
 
 ## [0.0.22]
 
@@ -371,19 +327,16 @@
 ### Fixed
 - Set label flow now works from `/users` selection, bypassing the forward-message limitation that blocked tag assignment when bot permissions denied reading user data from forwards
 
-
 ## [0.0.21]
 
 ### Fixed
 - Set label flow — forwarding a new user message in DM now always restarts the flow, even when a previous session is stuck at the group-selection step
-
 
 ## [0.0.20]
 
 ### Fixed
 - `/ticket` — removed topic root message guard that incorrectly blocked tickets in groups with a default General topic (where the first message ID equals the thread ID)
 - `/addtopic` — group list now reads from DB instead of in-memory cache, so all approved groups are shown regardless of bot restart
-
 
 ## [0.0.19]
 
@@ -393,13 +346,11 @@
 - `/export` admin DM command — sends the current CSV as a file attachment, then resets the log
 - `MESSAGES_CSV` env var — path for the message log file (default: `messages.csv`)
 
-
 ## [0.0.18]
 
 ### Added
 - `/categories` admin command — lists all categories with their current scope (global / group / topic); tap any category to change scope or delete it
 - Category detail view: Make Global, Group-level, Topic-level, Delete — all inline, no extra messages
-
 
 ## [0.0.17]
 
@@ -409,24 +360,20 @@
 ### Changed
 - README updated: setup instructions, bot permission requirements, member tag flow documented
 
-
 ## [0.0.16]
 
 ### Added
 - `/granttags` admin command — promotes the bot with `can_manage_tags` permission in the current group (requires "Add New Admins" enabled temporarily)
-
 
 ## [0.0.15]
 
 ### Fixed
 - Added debug logging to set label flow to trace failures after label input
 
-
 ## [0.0.14]
 
 ### Fixed
 - Set label flow now shows only approved groups from DB instead of in-memory cache
-
 
 ## [0.0.13]
 
@@ -437,7 +384,6 @@
 ### Removed
 - `ALLOWED_CHAT_ID` env var — replaced by DB-driven group approval
 
-
 ## [0.0.12]
 
 ### Added
@@ -447,7 +393,6 @@
 
 ### Added
 - `/setlabel @username <label>` admin command — assigns a display label to a user in the group chat
-
 
 ## [0.0.10]
 

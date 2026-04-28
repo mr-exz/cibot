@@ -22,21 +22,21 @@ type stateKey struct {
 }
 
 type Handler struct {
-	linear      *linear.Client
-	storage     *storage.DB
-	cfg         *config.Config
-	version     string
-	msglog      *msglog.Logger
-	mu          sync.Mutex
-	states      map[stateKey]interface{} // can hold *pendingSession or *pendingAdminSession
-	topics      map[int64]map[int]string // chat_id -> (thread_id -> topic_name)
-	groups      map[int64]string         // chat_id -> group title (discovered from messages)
-	knownUsers  map[int64]string         // user_id -> "username\x00first\x00last" fingerprint; skip DB write if unchanged
-	techThreads        map[string]*storage.TechThread // "chatID:threadID" -> open thread
-	techGroupInviteLink string                        // cached permanent invite link for the tech group
-	cmdRegistry []commandDef
-	cmdHandlers map[string]cmdHandler
-	dns         *pskzdns.Client // experimental DNS management
+	linear              *linear.Client
+	storage             *storage.DB
+	cfg                 *config.Config
+	version             string
+	msglog              *msglog.Logger
+	mu                  sync.Mutex
+	states              map[stateKey]interface{}       // can hold *pendingSession or *pendingAdminSession
+	topics              map[int64]map[int]string       // chat_id -> (thread_id -> topic_name)
+	groups              map[int64]string               // chat_id -> group title (discovered from messages)
+	knownUsers          map[int64]string               // user_id -> "username\x00first\x00last" fingerprint; skip DB write if unchanged
+	techThreads         map[string]*storage.TechThread // "chatID:threadID" -> open thread
+	techGroupInviteLink string                         // cached permanent invite link for the tech group
+	cmdRegistry         []commandDef
+	cmdHandlers         map[string]cmdHandler
+	dns                 *pskzdns.Client // experimental DNS management
 }
 
 func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *config.Config, version string) (*tgbot.Bot, error) {

@@ -153,16 +153,16 @@ func (h *Handler) registerCommands() []commandDef {
 		},
 		{
 			Name:      "thread",
-			Desc:      "Open a technical thread — reply to a message to create a Linear issue and a dedicated topic",
-			Group:     "Admin",
-			AdminOnly: true,
+			Desc:      "Open a technical thread from a message — reply to a message to create a Linear issue and a dedicated topic",
+			GroupDesc: "Open a technical thread — reply to a message to escalate it",
+			Group:     "Support",
 			Handler:   h.handleThread,
 		},
 		{
 			Name:      "close",
 			Desc:      "Close the current tech thread and dump messages to Linear (use inside a thread topic)",
-			Group:     "Admin",
-			AdminOnly: true,
+			GroupDesc: "Close the current tech thread and dump messages to Linear",
+			Group:     "Support",
 			Handler:   h.handleCloseThread,
 		},
 		{

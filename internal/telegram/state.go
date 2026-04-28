@@ -127,7 +127,7 @@ type pendingSession struct {
 	TicketMsgLink    string
 	TicketMsgBody    string
 	TicketMsgDate    time.Time
-	SourceMsgID      int    // original replied-to message ID; used by FlowThread to forward it
+	SourceMsgID      int // original replied-to message ID; used by FlowThread to forward it
 	ReporterUsername string
 	ReporterName     string
 	RequesterLinear  string // Linear username of the person who ran /ticket; empty if not linked
