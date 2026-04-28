@@ -5,6 +5,7 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 ## Features
 
 - **Ticket creation** — `/ticket` (reply to a message) captures reporter, message body, media, and source link automatically; `/ticket_manual` for a guided self-service flow when there is no source message
+- **Technical threads** (`/thread`) — reply to a message to create a Linear issue and a dedicated forum topic in a configured tech group; all messages in the topic are logged and dumped to Linear on `/close`
 - **Automatic support rotation** (daily/weekly) with on-duty assignment and work-hours awareness
 - **On-call visibility** (`/oncall`) — any group member can see who is on duty right now per category, with real-time availability status
 - **Support person status** (`/status`) — support persons set lunch/brb/away status via inline buttons; member tag updated automatically; shown in ticket confirmations
@@ -66,6 +67,7 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 - `DB_PATH` (optional, default: `cibot.db`) — SQLite database file path
 - `ADMIN_USERNAMES` (optional) — Comma-separated Telegram usernames allowed to use admin commands (with or without @)
   - Example: `ADMIN_USERNAMES=@alice,@charlie`
+- `TECH_GROUP_ID` (optional) — Telegram group ID where `/thread` creates topics; required to use the `/thread` and `/close` commands
 - `DNS_EMAIL` (optional) — ps.kz account email for DNS management; enables `/dns` when set together with `DNS_PASSWORD`
 - `DNS_PASSWORD` (optional) — ps.kz account password for DNS management
 
@@ -101,6 +103,8 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 - `/users` — List known users; tap a user to view profile, set member tag, or delete
 - `/export` — Send the current message log as a CSV file and reset it
 - `/offboard` — Remove a departed user from all bot-managed groups
+- `/thread` — Reply to a message to open a technical thread: creates a Linear issue (category picker → team key) and a dedicated topic in the tech group (`TECH_GROUP_ID`); original message forwarded automatically
+- `/close` — Run inside a tech thread topic to dump all logged messages as a Linear comment and close the topic
 - `/addtopic` — Register a forum topic (group → name → topic ID)
 - `/topics` — List all registered topics with chat IDs and thread IDs
 - `/dns` *(experimental)* — Manage ps.kz DNS records; requires `DNS_EMAIL` and `DNS_PASSWORD` env vars

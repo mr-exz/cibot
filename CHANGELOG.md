@@ -2,7 +2,9 @@
 
 ## [0.0.63]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/thread` confirmation message now shows two inline URL buttons ("Linear: INFRA-1738" and "Telegram: INFRA-1738") instead of raw URLs
+- Tech thread topic name is now just the Linear identifier (e.g. `INFRA-1738`) with no title suffix
 
 
 ## [0.0.62]

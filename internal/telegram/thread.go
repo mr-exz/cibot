@@ -117,18 +117,9 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 		return
 	}
 
-	topicName := issue.Identifier
-	short := title
-	if len(short) > 50 {
-		short = short[:47] + "..."
-	}
-	if short != "" {
-		topicName = fmt.Sprintf("%s: %s", issue.Identifier, short)
-	}
-
 	topic, err := b.CreateForumTopic(ctx, &tgbot.CreateForumTopicParams{
 		ChatID: h.cfg.TechGroupID,
-		Name:   topicName,
+		Name:   issue.Identifier,
 	})
 	if err != nil {
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
@@ -176,10 +167,19 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 	delete(h.states, stateKey{UserID: pending.UserID})
 	h.mu.Unlock()
 
+	topicLink := telegramTopicLink(h.cfg.TechGroupID, topic.MessageThreadID)
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    pending.ChatID,
 		MessageID: pending.MessageID,
-		Text:      fmt.Sprintf("✅ Thread opened!\n\nLinear: %s\nTopic: %s", issue.URL, topicName),
+		Text:      "✅ Thread opened!",
+		ReplyMarkup: &models.InlineKeyboardMarkup{
+			InlineKeyboard: [][]models.InlineKeyboardButton{
+				{
+					{Text: "Linear: " + issue.Identifier, URL: issue.URL},
+					{Text: "Telegram: " + issue.Identifier, URL: topicLink},
+				},
+			},
+		},
 	})
 	log.Printf("✓ Tech thread created: %s (topic %d in chat %d)", issue.Identifier, topic.MessageThreadID, h.cfg.TechGroupID)
 }
@@ -266,6 +266,16 @@ func (h *Handler) handleCloseThread(ctx context.Context, b *tgbot.Bot, msg *mode
 		Text:            fmt.Sprintf("✅ Thread closed. Messages dumped to Linear: %s", tt.LinearIssueURL),
 	})
 	log.Printf("✓ Tech thread closed: %s (by @%s)", tt.LinearIssueURL, msg.From.Username)
+}
+
+// telegramTopicLink builds a t.me deep link to a specific forum topic.
+// Supergroup chat IDs have a -100 prefix that must be stripped for the URL.
+func telegramTopicLink(chatID int64, threadID int) string {
+	s := fmt.Sprintf("%d", -chatID) // make positive
+	if len(s) > 3 && s[:3] == "100" {
+		s = s[3:]
+	}
+	return fmt.Sprintf("https://t.me/c/%s/%d", s, threadID)
 }
 
 // appendToThreadFile appends a formatted message line to the thread file.
