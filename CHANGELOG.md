@@ -2,7 +2,9 @@
 
 ## [0.0.66]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/thread` now assigns the on-duty person for the selected category to the Linear issue (same logic as `/ticket`); offline warning shown in confirmation if assignee is outside working hours
+- Tech thread topic message shows on-call person by name without `@` ping, with a Ping button — clicking it appends "Pinged X by Y at HH:MM" to the message and sends a separate `@username` mention to trigger the notification
 
 
 ## [0.0.65]

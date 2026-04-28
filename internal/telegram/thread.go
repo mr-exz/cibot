@@ -151,11 +151,30 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 		MessageID:       pending.SourceMsgID,
 	})
 
-	b.SendMessage(ctx, &tgbot.SendMessageParams{
+	onCallLine := "On call: (unassigned)"
+	var pingButton *models.InlineKeyboardButton
+	if onDutyResult != nil && onDutyResult.Person != nil {
+		p := onDutyResult.Person
+		status := "🟢"
+		if !onDutyResult.Online {
+			status = "🔴"
+		}
+		onCallLine = fmt.Sprintf("On call: %s %s", p.Name, status)
+		btn := models.InlineKeyboardButton{Text: "Ping " + p.Name, CallbackData: "ping:" + p.TelegramUsername}
+		pingButton = &btn
+	}
+
+	topicMsgParams := &tgbot.SendMessageParams{
 		ChatID:          h.cfg.TechGroupID,
 		MessageThreadID: topic.MessageThreadID,
-		Text:            fmt.Sprintf("Linear: %s\nUse /close when done to dump this thread to the issue.", issue.URL),
-	})
+		Text:            fmt.Sprintf("Linear: %s\n%s\n\nUse /close when done to dump this thread to the issue.", issue.URL, onCallLine),
+	}
+	if pingButton != nil {
+		topicMsgParams.ReplyMarkup = &models.InlineKeyboardMarkup{
+			InlineKeyboard: [][]models.InlineKeyboardButton{{*pingButton}},
+		}
+	}
+	b.SendMessage(ctx, topicMsgParams)
 
 	filePath := filepath.Join(filepath.Dir(h.cfg.CSVPath), issue.Identifier+".txt")
 
@@ -181,6 +200,11 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 	delete(h.states, stateKey{UserID: pending.UserID})
 	h.mu.Unlock()
 
+	confirmText := "✅ Thread opened!"
+	if onDutyResult != nil && !onDutyResult.Online {
+		confirmText += "\n\n⚠️ Assigned person is currently outside working hours."
+	}
+
 	topicLink := telegramTopicLink(h.cfg.TechGroupID, topic.MessageThreadID)
 	inviteLink := h.getTechGroupInviteLink(ctx, b)
 
@@ -195,7 +219,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    pending.ChatID,
 		MessageID: pending.MessageID,
-		Text:      "✅ Thread opened! Continue the discussion in the topic.",
+		Text:      confirmText,
 		ReplyMarkup: &models.InlineKeyboardMarkup{
 			InlineKeyboard: [][]models.InlineKeyboardButton{buttons},
 		},
