@@ -107,7 +107,21 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 	description := fmt.Sprintf("**Reporter:** %s\n**Category:** %s\n**Source:** %s\n\n%s",
 		reporter, pending.CategoryName, pending.TicketMsgLink, pending.TicketMsgBody)
 
-	issue, err := h.linear.CreateIssue(ctx, title, description, pending.TeamKey, "", nil, 0)
+	onDutyResult, err := h.storage.GetOnDutyPersonResult(ctx, pending.CategoryID, time.Now())
+	if err != nil {
+		log.Printf("⚠️  Failed to get on-duty person for thread: %v", err)
+		onDutyResult = nil
+	}
+
+	assignee := ""
+	if onDutyResult != nil && onDutyResult.Person != nil {
+		assignee = onDutyResult.Person.LinearUsername
+	}
+	if onDutyResult != nil && !onDutyResult.Online {
+		description += "\n\n⚠️ **Note:** Assigned person is currently outside working hours."
+	}
+
+	issue, err := h.linear.CreateIssue(ctx, title, description, pending.TeamKey, assignee, nil, 0)
 	if err != nil {
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    pending.ChatID,
@@ -181,7 +195,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    pending.ChatID,
 		MessageID: pending.MessageID,
-		Text:      "✅ Thread opened!",
+		Text:      "✅ Thread opened! Continue the discussion in the topic.",
 		ReplyMarkup: &models.InlineKeyboardMarkup{
 			InlineKeyboard: [][]models.InlineKeyboardButton{buttons},
 		},

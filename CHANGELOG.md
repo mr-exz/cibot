@@ -2,7 +2,9 @@
 
 ## [0.0.65]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/thread` now assigns the on-duty person for the selected category to the Linear issue (same logic as `/ticket`); an offline note is appended to the issue description if the assignee is outside working hours
+- `/thread` confirmation text updated to "✅ Thread opened! Continue the discussion in the topic."
 
 
 ## [0.0.64]
