@@ -42,14 +42,12 @@ func (h *Handler) registerCommands() []commandDef {
 		},
 		{
 			Name:      "ticket",
-			Desc:      "Reply to a message to create a support ticket",
 			GroupDesc: "Reply to a message to create a support ticket",
 			Group:     "Support",
 			Handler:   h.handleTicketStart,
 		},
 		{
 			Name:      "ticket_manual",
-			Desc:      "Create a support ticket by filling in the details yourself",
 			GroupDesc: "Create a support ticket by filling in the details yourself",
 			Group:     "Support",
 			Handler:   h.handleSupportStart,
@@ -153,14 +151,12 @@ func (h *Handler) registerCommands() []commandDef {
 		},
 		{
 			Name:      "thread",
-			Desc:      "Reply to a message to open a technical thread — creates a Linear issue and a dedicated topic",
 			GroupDesc: "Reply to a message to escalate it as a technical thread",
 			Group:     "Support",
 			Handler:   h.handleThread,
 		},
 		{
 			Name:      "close",
-			Desc:      "Close this thread and post all messages to the Linear issue",
 			GroupDesc: "Close this thread and post all messages to the Linear issue",
 			Group:     "Support",
 			Handler:   h.handleCloseThread,
@@ -196,8 +192,7 @@ func (h *Handler) buildHelpText(username string) string {
 	var sb strings.Builder
 	sb.WriteString("Available commands:\n")
 
-	// User — commands usable in both Group and DM
-	sb.WriteString("\nUser — Group & DM:\n")
+	sb.WriteString("\nIn groups:\n")
 	for _, cmd := range h.cmdRegistry {
 		if cmd.AdminOnly || cmd.GroupDesc == "" {
 			continue
@@ -205,16 +200,14 @@ func (h *Handler) buildHelpText(username string) string {
 		sb.WriteString(fmt.Sprintf("  /%s — %s\n", cmd.Name, cmd.GroupDesc))
 	}
 
-	// User — DM-only commands (no GroupDesc)
-	sb.WriteString("\nUser — DM:\n")
+	sb.WriteString("\nIn DM:\n")
 	for _, cmd := range h.cmdRegistry {
-		if cmd.AdminOnly || cmd.Group != "Support" || cmd.GroupDesc != "" {
+		if cmd.AdminOnly || cmd.Desc == "" || cmd.Group != "Support" {
 			continue
 		}
 		sb.WriteString(fmt.Sprintf("  /%s — %s\n", cmd.Name, cmd.Desc))
 	}
 
-	// Admin — only visible to admins
 	if admin {
 		sb.WriteString("\nAdmin:\n")
 		for _, group := range []string{"Admin", "Topics"} {

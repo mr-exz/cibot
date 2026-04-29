@@ -2,7 +2,11 @@
 
 ## [0.0.69]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/start` help output is now split into two sections — "In groups" and "In DM" — driven purely by whether a command has `GroupDesc` and/or `Desc` set; commands with only `GroupDesc` appear in groups only, commands with only `Desc` appear in DM only, commands with both appear in both sections with their respective descriptions
+- `/ticket`, `/ticket_manual`, `/thread`, `/close` are now group-only (`Desc` cleared) — they require a group/topic context and no longer appear in the DM section
+- `/thread` confirmation message now explicitly instructs users to click "Join tech group" to continue in the dedicated topic
+- Removed auto-join reporter feature (`addChatMember`) — the Telegram Bot API does not support adding users to groups directly; the "Join tech group" invite link button remains the way to join
 
 
 ## [0.0.68]

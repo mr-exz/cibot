@@ -130,7 +130,6 @@ type pendingSession struct {
 	SourceMsgID      int // original replied-to message ID; used by FlowThread to forward it
 	ReporterUsername string
 	ReporterName     string
-	ReporterUserID   int64  // Telegram user ID of the reporter; used by FlowThread to add to tech group
 	RequesterLinear  string // Linear username of the person who ran /ticket; empty if not linked
 }
 
