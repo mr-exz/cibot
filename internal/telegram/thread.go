@@ -43,9 +43,11 @@ func (h *Handler) handleThread(ctx context.Context, b *tgbot.Bot, msg *models.Me
 
 	reporterName := ""
 	reporterUsername := ""
+	var reporterUserID int64
 	if replied.From != nil {
 		reporterName = strings.TrimSpace(replied.From.FirstName + " " + replied.From.LastName)
 		reporterUsername = replied.From.Username
+		reporterUserID = replied.From.ID
 	}
 
 	categories, err := h.storage.ListCategoriesForContext(ctx, msg.Chat.ID, msg.MessageThreadID)
@@ -83,6 +85,7 @@ func (h *Handler) handleThread(ctx context.Context, b *tgbot.Bot, msg *models.Me
 		SourceMsgID:      replied.ID,
 		ReporterName:     reporterName,
 		ReporterUsername: reporterUsername,
+		ReporterUserID:   reporterUserID,
 	}
 
 	key := stateKey{UserID: msg.From.ID}
@@ -150,6 +153,22 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 		FromChatID:      pending.ChatID,
 		MessageID:       pending.SourceMsgID,
 	})
+
+	// Add the reporter to the tech group and notify them in the topic.
+	if pending.ReporterUserID != 0 {
+		if err := addChatMember(ctx, h.cfg.TelegramToken, h.cfg.TechGroupID, pending.ReporterUserID); err != nil {
+			log.Printf("⚠️  Failed to add reporter to tech group: %v", err)
+		}
+		notifyText := pending.ReporterName + ", you've been added to this thread. Please continue the conversation here."
+		if pending.ReporterUsername != "" {
+			notifyText = "@" + pending.ReporterUsername + " you've been added to this thread. Please continue the conversation here."
+		}
+		b.SendMessage(ctx, &tgbot.SendMessageParams{
+			ChatID:          h.cfg.TechGroupID,
+			MessageThreadID: topic.MessageThreadID,
+			Text:            notifyText,
+		})
+	}
 
 	onCallLine := "On call: (unassigned)"
 	var pingButton *models.InlineKeyboardButton

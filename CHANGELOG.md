@@ -2,7 +2,9 @@
 
 ## [0.0.68]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/thread` now automatically adds the reporter (the user whose message was replied to) to the tech group via `addChatMember` and sends a mention in the new topic so they know to continue the conversation there (bot requires "Add Members" permission in the tech group; errors are logged but do not block thread creation)
+- Command descriptions cleaned up: action verbs moved to front, "dump" replaced with "post", removed redundant hints from inline text, `GroupDesc` and `Desc` now reflect their respective contexts (group vs DM), `/categories` description clarified from "scopes" to "categories", `/mylinear` changed to "Link or update"
 
 
 ## [0.0.67]
