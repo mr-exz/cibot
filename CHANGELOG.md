@@ -2,7 +2,8 @@
 
 ## [0.0.73]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- Linear file upload: `fileUpload` mutation parameters are `mimeType` and `filesize`, not `contentType` and `size` — wrong names were silently accepted by GraphQL but generated an invalid pre-signed URL, causing S3 to reject the PUT with 400; also set explicit `Content-Type` and `Content-Length` on the PUT request
 
 
 ## [0.0.72]

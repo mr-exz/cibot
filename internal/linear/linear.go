@@ -544,8 +544,8 @@ func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, a
 // UploadFile uploads raw file data to Linear via the fileUpload mutation and returns the asset URL.
 func (c *Client) UploadFile(ctx context.Context, filename, contentType string, data []byte) (string, error) {
 	payload := map[string]interface{}{
-		"query": `mutation FileUpload($contentType: String!, $filename: String!, $size: Int!) {
-			fileUpload(contentType: $contentType, filename: $filename, size: $size) {
+		"query": `mutation FileUpload($mimeType: String!, $filename: String!, $filesize: Int!) {
+			fileUpload(mimeType: $mimeType, filename: $filename, filesize: $filesize) {
 				uploadFile {
 					uploadUrl
 					assetUrl
@@ -554,9 +554,9 @@ func (c *Client) UploadFile(ctx context.Context, filename, contentType string, d
 			}
 		}`,
 		"variables": map[string]interface{}{
-			"contentType": contentType,
-			"filename":    filename,
-			"size":        len(data),
+			"mimeType": contentType,
+			"filename": filename,
+			"filesize": len(data),
 		},
 	}
 
@@ -607,6 +607,8 @@ func (c *Client) UploadFile(ctx context.Context, filename, contentType string, d
 	if err != nil {
 		return "", err
 	}
+	putReq.Header.Set("Content-Type", contentType)
+	putReq.ContentLength = int64(len(data))
 	for _, h := range fu.Headers {
 		putReq.Header.Set(h.Key, h.Value)
 	}
@@ -614,9 +616,10 @@ func (c *Client) UploadFile(ctx context.Context, filename, contentType string, d
 	if err != nil {
 		return "", fmt.Errorf("upload PUT failed: %w", err)
 	}
-	putResp.Body.Close()
+	defer putResp.Body.Close()
 	if putResp.StatusCode >= 300 {
-		return "", fmt.Errorf("upload PUT returned status %d", putResp.StatusCode)
+		body, _ := io.ReadAll(putResp.Body)
+		return "", fmt.Errorf("upload PUT status %d: %s", putResp.StatusCode, string(body))
 	}
 
 	return fu.AssetURL, nil
