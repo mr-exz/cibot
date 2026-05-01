@@ -2,7 +2,8 @@
 
 ## [0.0.75]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- Tech thread close: media files are now embedded directly in the Linear comment using `![name](url)` for images (renders inline preview) and `[name](url)` for other files, instead of creating sidebar `attachmentCreate` links; all uploads happen before the comment is posted so everything appears in one comment
 
 
 ## [0.0.74]

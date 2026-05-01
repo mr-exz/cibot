@@ -492,20 +492,14 @@ func (h *Handler) uploadThreadData(b *tgbot.Bot, tt *storage.TechThread, chatID 
 		log.Printf("⚠️  uploadThreadData: download wait timed out, proceeding with available files")
 	}
 
-	data, _ := os.ReadFile(filepath.Join(tt.FilePath, "messages.txt"))
-	var comment string
-	if len(data) == 0 {
-		comment = fmt.Sprintf("## Telegram Thread\n\nClosed by @%s — no messages were logged.", closedBy)
-	} else {
-		comment = fmt.Sprintf("## Telegram Thread\n\nClosed by @%s on %s\n\n---\n\n%s",
-			closedBy, time.Now().UTC().Format("2006-01-02 15:04 UTC"), string(data))
+	// Upload all media files first, collect asset URLs for embedding in the comment.
+	type uploadedFile struct {
+		name     string
+		assetURL string
+		isImage  bool
 	}
-	if err := h.linear.CreateComment(ctx, tt.LinearIssueID, comment); err != nil {
-		log.Printf("⚠️  uploadThreadData: comment failed: %v", err)
-	}
-
 	entries, _ := os.ReadDir(tt.FilePath)
-	uploaded := 0
+	var uploads []uploadedFile
 	for _, entry := range entries {
 		if entry.IsDir() || entry.Name() == "messages.txt" {
 			continue
@@ -515,17 +509,38 @@ func (h *Handler) uploadThreadData(b *tgbot.Bot, tt *storage.TechThread, chatID 
 			log.Printf("⚠️  uploadThreadData: read %s: %v", entry.Name(), err)
 			continue
 		}
-		assetURL, err := h.linear.UploadFile(ctx, entry.Name(), contentTypeForFile(entry.Name()), fileData)
+		ct := contentTypeForFile(entry.Name())
+		assetURL, err := h.linear.UploadFile(ctx, entry.Name(), ct, fileData)
 		if err != nil {
 			log.Printf("⚠️  uploadThreadData: upload %s: %v", entry.Name(), err)
 			continue
 		}
-		if err := h.linear.CreateAttachment(ctx, tt.LinearIssueID, entry.Name(), assetURL); err != nil {
-			log.Printf("⚠️  uploadThreadData: attachment %s: %v", entry.Name(), err)
-			continue
-		}
-		uploaded++
+		uploads = append(uploads, uploadedFile{entry.Name(), assetURL, strings.HasPrefix(ct, "image/")})
 	}
+
+	// Build comment: message log + inline images + links for non-images.
+	msgData, _ := os.ReadFile(filepath.Join(tt.FilePath, "messages.txt"))
+	var sb strings.Builder
+	sb.WriteString("## Telegram Thread\n\n")
+	sb.WriteString(fmt.Sprintf("Closed by @%s on %s\n", closedBy, time.Now().UTC().Format("2006-01-02 15:04 UTC")))
+	if len(msgData) > 0 {
+		sb.WriteString("\n---\n\n")
+		sb.WriteString(string(msgData))
+	}
+	if len(uploads) > 0 {
+		sb.WriteString("\n---\n\n")
+		for _, u := range uploads {
+			if u.isImage {
+				sb.WriteString(fmt.Sprintf("![%s](%s)\n\n", u.name, u.assetURL))
+			} else {
+				sb.WriteString(fmt.Sprintf("[%s](%s)\n\n", u.name, u.assetURL))
+			}
+		}
+	}
+	if err := h.linear.CreateComment(ctx, tt.LinearIssueID, sb.String()); err != nil {
+		log.Printf("⚠️  uploadThreadData: comment failed: %v", err)
+	}
+	uploaded := len(uploads)
 
 	b.CloseForumTopic(ctx, &tgbot.CloseForumTopicParams{
 		ChatID:          chatID,
