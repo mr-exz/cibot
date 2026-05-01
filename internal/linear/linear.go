@@ -544,8 +544,8 @@ func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, a
 // UploadFile uploads raw file data to Linear via the fileUpload mutation and returns the asset URL.
 func (c *Client) UploadFile(ctx context.Context, filename, contentType string, data []byte) (string, error) {
 	payload := map[string]interface{}{
-		"query": `mutation FileUpload($mimeType: String!, $filename: String!, $filesize: Int!) {
-			fileUpload(mimeType: $mimeType, filename: $filename, filesize: $filesize) {
+		"query": `mutation FileUpload($contentType: String!, $filename: String!, $size: Int!) {
+			fileUpload(contentType: $contentType, filename: $filename, size: $size) {
 				uploadFile {
 					uploadUrl
 					assetUrl
@@ -554,9 +554,9 @@ func (c *Client) UploadFile(ctx context.Context, filename, contentType string, d
 			}
 		}`,
 		"variables": map[string]interface{}{
-			"mimeType": contentType,
-			"filename": filename,
-			"filesize": len(data),
+			"contentType": contentType,
+			"filename":    filename,
+			"size":        len(data),
 		},
 	}
 

@@ -2,7 +2,8 @@
 
 ## [0.0.74]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- Linear file upload: reverted parameter names back to `contentType` and `size` (confirmed correct via schema introspection); the 0.0.73 change to `mimeType`/`filesize` was based on incorrect docs and caused "Unknown argument" errors
 
 
 ## [0.0.73]
