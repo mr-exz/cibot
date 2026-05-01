@@ -2,7 +2,8 @@
 
 ## [0.0.71]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- Linear file upload: `fileUpload` mutation response field is `uploadFile`, not `uploadUrl` — fixes "Cannot query field uploadUrl on type UploadPayload" error that caused all media uploads to fail
 
 
 ## [0.0.70]

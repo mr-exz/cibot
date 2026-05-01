@@ -546,7 +546,7 @@ func (c *Client) UploadFile(ctx context.Context, filename, contentType string, d
 	payload := map[string]interface{}{
 		"query": `mutation FileUpload($contentType: String!, $filename: String!, $size: Int!) {
 			fileUpload(contentType: $contentType, filename: $filename, size: $size) {
-				uploadUrl
+				uploadFile
 				assetUrl
 				headers { key value }
 			}
@@ -575,7 +575,7 @@ func (c *Client) UploadFile(ctx context.Context, filename, contentType string, d
 	var result struct {
 		Data struct {
 			FileUpload struct {
-				UploadURL string `json:"uploadUrl"`
+				UploadURL string `json:"uploadFile"`
 				AssetURL  string `json:"assetUrl"`
 				Headers   []struct {
 					Key   string `json:"key"`
