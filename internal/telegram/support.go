@@ -462,8 +462,6 @@ func (h *Handler) createSupportIssue(ctx context.Context, b *tgbot.Bot, pending 
 		})
 		return
 	}
-	url := issue.URL
-
 	h.mu.Lock()
 	delete(h.states, stateKey{UserID: pending.UserID})
 	h.mu.Unlock()
@@ -487,19 +485,22 @@ func (h *Handler) createSupportIssue(ctx context.Context, b *tgbot.Bot, pending 
 		Text: fmt.Sprintf(
 			"✅ Issue created!\n\n"+
 				"📋 Category: %s\n"+
-				"👤 Assigned to: %s\n"+
-				"🔗 Linear: %s",
+				"👤 Assigned to: %s",
 			pending.CategoryName,
 			assigneeStr,
-			url,
 		),
+		ReplyMarkup: &models.InlineKeyboardMarkup{
+			InlineKeyboard: [][]models.InlineKeyboardButton{
+				{{Text: "Linear: " + issue.Identifier, URL: issue.URL}},
+			},
+		},
 	})
 
 	assignedPersonName := "unassigned"
 	if onDutyResult != nil && onDutyResult.Person != nil {
 		assignedPersonName = onDutyResult.Person.Name
 	}
-	log.Printf("✓ Support issue created: %s (assigned to %s)", url, assignedPersonName)
+	log.Printf("✓ Support issue created: %s (assigned to %s)", issue.URL, assignedPersonName)
 }
 
 // Helper functions

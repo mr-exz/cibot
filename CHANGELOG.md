@@ -2,7 +2,13 @@
 
 ## [0.0.70]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- Tech threads now store files in a per-thread folder (`INFRA-1738/`) instead of a single `.txt` file
+- Media messages (photo, video, audio, voice, document, animation, video note) posted in an open tech thread topic are downloaded in the background and saved to the thread folder; files over 25 MB are skipped
+- `/close` now responds immediately and runs upload in a background goroutine — waits up to 60 s for any in-flight media downloads to finish before uploading; the 60 s limit also caps the total upload time
+- On close: all messages are posted as a Linear comment and each media file is uploaded to Linear via `fileUpload` + `attachmentCreate`; the topic is closed and the folder deleted after upload
+- A "✅ Upload complete. Took Xs. N file(s) attached." message is sent in the topic when the goroutine finishes
+- `/ticket` and `/ticket_manual` confirmation messages now show a `[Linear: ENG-123]` inline button instead of a raw URL in the text, consistent with `/thread`
 
 
 ## [0.0.69]

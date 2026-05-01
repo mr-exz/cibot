@@ -3,16 +3,25 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/mr-exz/cibot/internal/storage"
 )
+
+// activeThread pairs a TechThread with a WaitGroup tracking in-flight media downloads.
+type activeThread struct {
+	tt        *storage.TechThread
+	downloads sync.WaitGroup
+}
 
 // techThreadKey returns the map key used for the in-memory tech thread cache.
 func techThreadKey(chatID int64, threadID int) string {
@@ -176,7 +185,10 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 	}
 	b.SendMessage(ctx, topicMsgParams)
 
-	filePath := filepath.Join(filepath.Dir(h.cfg.CSVPath), issue.Identifier+".txt")
+	folderPath := filepath.Join(filepath.Dir(h.cfg.CSVPath), issue.Identifier)
+	if err := os.MkdirAll(folderPath, 0755); err != nil {
+		log.Printf("⚠️  Failed to create thread folder: %v", err)
+	}
 
 	tt := &storage.TechThread{
 		LinearIssueID:   issue.ID,
@@ -185,7 +197,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 		TechThreadID:    topic.MessageThreadID,
 		SourceChatID:    pending.ChatID,
 		SourceThreadID:  pending.ThreadID,
-		FilePath:        filePath,
+		FilePath:        folderPath,
 		CreatedByUserID: pending.UserID,
 	}
 
@@ -196,7 +208,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 	tt.ID = id
 
 	h.mu.Lock()
-	h.techThreads[techThreadKey(tt.TechChatID, tt.TechThreadID)] = tt
+	h.techThreads[techThreadKey(tt.TechChatID, tt.TechThreadID)] = &activeThread{tt: tt}
 	delete(h.states, stateKey{UserID: pending.UserID})
 	h.mu.Unlock()
 
@@ -240,11 +252,17 @@ func (h *Handler) handleCloseThread(ctx context.Context, b *tgbot.Bot, msg *mode
 	}
 
 	h.mu.Lock()
-	tt := h.techThreads[techThreadKey(msg.Chat.ID, msg.MessageThreadID)]
+	at := h.techThreads[techThreadKey(msg.Chat.ID, msg.MessageThreadID)]
+	delete(h.techThreads, techThreadKey(msg.Chat.ID, msg.MessageThreadID))
 	h.mu.Unlock()
 
-	if tt == nil {
-		// Not in cache — try DB (handles the case where bot restarted after thread creation)
+	var tt *storage.TechThread
+	var wg *sync.WaitGroup
+	if at != nil {
+		tt = at.tt
+		wg = &at.downloads
+	} else {
+		// Bot restarted after thread creation — no in-flight downloads
 		var err error
 		tt, err = h.storage.GetTechThreadByTopic(ctx, msg.Chat.ID, msg.MessageThreadID)
 		if err != nil {
@@ -255,60 +273,22 @@ func (h *Handler) handleCloseThread(ctx context.Context, b *tgbot.Bot, msg *mode
 			h.sendMessage(ctx, b, msg, "⚠️ No open thread found for this topic.")
 			return
 		}
+		var empty sync.WaitGroup
+		wg = &empty
 	}
 
-	// Read messages from file
-	data, err := os.ReadFile(tt.FilePath)
-	if err != nil && !os.IsNotExist(err) {
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to read thread file: %v", err))
-		return
-	}
-
-	// Post comment to Linear
-	var comment string
-	if len(data) == 0 {
-		comment = fmt.Sprintf("## Telegram Thread\n\nClosed by @%s — no messages were logged.", msg.From.Username)
-	} else {
-		comment = fmt.Sprintf("## Telegram Thread\n\nClosed by @%s on %s\n\n---\n\n%s",
-			msg.From.Username,
-			time.Now().UTC().Format("2006-01-02 15:04 UTC"),
-			string(data))
-	}
-
-	if err := h.linear.CreateComment(ctx, tt.LinearIssueID, comment); err != nil {
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to post to Linear: %v", err))
-		return
-	}
-
-	// Close the Telegram topic
-	b.CloseForumTopic(ctx, &tgbot.CloseForumTopicParams{
-		ChatID:          msg.Chat.ID,
-		MessageThreadID: msg.MessageThreadID,
-	})
-
-	// Mark closed in DB
 	if err := h.storage.CloseTechThread(ctx, tt.ID); err != nil {
 		log.Printf("⚠️  Failed to close tech thread in DB: %v", err)
-	}
-
-	// Remove from cache
-	h.mu.Lock()
-	delete(h.techThreads, techThreadKey(msg.Chat.ID, msg.MessageThreadID))
-	h.mu.Unlock()
-
-	// Delete file
-	if len(data) > 0 {
-		if err := os.Remove(tt.FilePath); err != nil {
-			log.Printf("⚠️  Failed to delete thread file %s: %v", tt.FilePath, err)
-		}
 	}
 
 	b.SendMessage(ctx, &tgbot.SendMessageParams{
 		ChatID:          msg.Chat.ID,
 		MessageThreadID: msg.MessageThreadID,
-		Text:            fmt.Sprintf("✅ Thread closed. Messages dumped to Linear: %s", tt.LinearIssueURL),
+		Text:            "✅ Thread closed. Uploading messages and files to Linear in the background...",
 	})
-	log.Printf("✓ Tech thread closed: %s (by @%s)", tt.LinearIssueURL, msg.From.Username)
+
+	go h.uploadThreadData(b, tt, msg.Chat.ID, msg.MessageThreadID, msg.From.Username, wg)
+	log.Printf("✓ Tech thread closing: %s (by @%s)", tt.LinearIssueURL, msg.From.Username)
 }
 
 // getTechGroupInviteLink returns a cached permanent invite link for the tech group,
@@ -346,8 +326,8 @@ func telegramTopicLink(chatID int64, threadID int) string {
 	return fmt.Sprintf("https://t.me/c/%s/%d", s, threadID)
 }
 
-// appendToThreadFile appends a formatted message line to the thread file.
-func appendToThreadFile(filePath string, msg *models.Message) {
+// appendToThreadFile appends a formatted message line to messages.txt inside the thread folder.
+func appendToThreadFile(folderPath string, msg *models.Message) {
 	if msg.From == nil {
 		return
 	}
@@ -361,7 +341,7 @@ func appendToThreadFile(filePath string, msg *models.Message) {
 	content := messageContent(msg)
 	line := fmt.Sprintf("[%s] %s: %s\n", ts, sender, content)
 
-	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filepath.Join(folderPath, "messages.txt"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Printf("⚠️  thread file open: %v", err)
 		return
@@ -370,4 +350,199 @@ func appendToThreadFile(filePath string, msg *models.Message) {
 	if _, err := f.WriteString(line); err != nil {
 		log.Printf("⚠️  thread file write: %v", err)
 	}
+}
+
+// threadMedia holds metadata about a media attachment extracted from a Telegram message.
+type threadMedia struct {
+	fileID      string
+	fileSize    int64
+	filename    string
+	contentType string
+}
+
+const maxThreadMediaSize = 25 * 1024 * 1024 // 25 MB
+
+// extractThreadMedia returns downloadable media metadata from a message, or nil if none.
+func extractThreadMedia(msg *models.Message) *threadMedia {
+	switch {
+	case len(msg.Photo) > 0:
+		p := msg.Photo[len(msg.Photo)-1]
+		return &threadMedia{p.FileID, int64(p.FileSize), fmt.Sprintf("photo_%d.jpg", msg.ID), "image/jpeg"}
+	case msg.Document != nil:
+		name := msg.Document.FileName
+		if name == "" {
+			name = fmt.Sprintf("document_%d", msg.ID)
+		}
+		ct := msg.Document.MimeType
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		return &threadMedia{msg.Document.FileID, msg.Document.FileSize, name, ct}
+	case msg.Video != nil:
+		name := msg.Video.FileName
+		if name == "" {
+			name = fmt.Sprintf("video_%d.mp4", msg.ID)
+		}
+		ct := msg.Video.MimeType
+		if ct == "" {
+			ct = "video/mp4"
+		}
+		return &threadMedia{msg.Video.FileID, msg.Video.FileSize, name, ct}
+	case msg.Audio != nil:
+		name := msg.Audio.FileName
+		if name == "" {
+			name = fmt.Sprintf("audio_%d.mp3", msg.ID)
+		}
+		ct := msg.Audio.MimeType
+		if ct == "" {
+			ct = "audio/mpeg"
+		}
+		return &threadMedia{msg.Audio.FileID, msg.Audio.FileSize, name, ct}
+	case msg.Voice != nil:
+		return &threadMedia{msg.Voice.FileID, msg.Voice.FileSize, fmt.Sprintf("voice_%d.ogg", msg.ID), "audio/ogg"}
+	case msg.VideoNote != nil:
+		return &threadMedia{msg.VideoNote.FileID, int64(msg.VideoNote.FileSize), fmt.Sprintf("videonote_%d.mp4", msg.ID), "video/mp4"}
+	case msg.Animation != nil:
+		ct := msg.Animation.MimeType
+		if ct == "" {
+			ct = "video/mp4"
+		}
+		return &threadMedia{msg.Animation.FileID, msg.Animation.FileSize, fmt.Sprintf("animation_%d.mp4", msg.ID), ct}
+	}
+	return nil
+}
+
+// downloadMediaToFolder downloads a media attachment from a Telegram message into the thread folder.
+func (h *Handler) downloadMediaToFolder(ctx context.Context, b *tgbot.Bot, folder string, msg *models.Message) {
+	meta := extractThreadMedia(msg)
+	if meta == nil {
+		return
+	}
+	if meta.fileSize > maxThreadMediaSize {
+		log.Printf("⚠️  thread media: %s too large (%d bytes), skipping", meta.filename, meta.fileSize)
+		return
+	}
+
+	file, err := b.GetFile(ctx, &tgbot.GetFileParams{FileID: meta.fileID})
+	if err != nil {
+		log.Printf("⚠️  thread media: GetFile failed: %v", err)
+		return
+	}
+
+	dlURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", h.cfg.TelegramToken, file.FilePath)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dlURL, nil)
+	if err != nil {
+		log.Printf("⚠️  thread media: request error: %v", err)
+		return
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("⚠️  thread media: download failed: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("⚠️  thread media: read failed: %v", err)
+		return
+	}
+
+	if err := os.WriteFile(filepath.Join(folder, meta.filename), data, 0644); err != nil {
+		log.Printf("⚠️  thread media: save failed: %v", err)
+	}
+}
+
+// contentTypeForFile returns a MIME type for a filename based on its extension.
+func contentTypeForFile(name string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".mp4":
+		return "video/mp4"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".ogg":
+		return "audio/ogg"
+	case ".pdf":
+		return "application/pdf"
+	}
+	return "application/octet-stream"
+}
+
+// uploadThreadData runs in a goroutine after /close: posts messages as a Linear comment,
+// uploads media files as attachments, closes the topic, and reports completion.
+func (h *Handler) uploadThreadData(b *tgbot.Bot, tt *storage.TechThread, chatID int64, threadID int, closedBy string, wg *sync.WaitGroup) {
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// Wait for in-flight media downloads to finish (bounded by the 60s context)
+	waitDone := make(chan struct{})
+	go func() { wg.Wait(); close(waitDone) }()
+	select {
+	case <-waitDone:
+	case <-ctx.Done():
+		log.Printf("⚠️  uploadThreadData: download wait timed out, proceeding with available files")
+	}
+
+	data, _ := os.ReadFile(filepath.Join(tt.FilePath, "messages.txt"))
+	var comment string
+	if len(data) == 0 {
+		comment = fmt.Sprintf("## Telegram Thread\n\nClosed by @%s — no messages were logged.", closedBy)
+	} else {
+		comment = fmt.Sprintf("## Telegram Thread\n\nClosed by @%s on %s\n\n---\n\n%s",
+			closedBy, time.Now().UTC().Format("2006-01-02 15:04 UTC"), string(data))
+	}
+	if err := h.linear.CreateComment(ctx, tt.LinearIssueID, comment); err != nil {
+		log.Printf("⚠️  uploadThreadData: comment failed: %v", err)
+	}
+
+	entries, _ := os.ReadDir(tt.FilePath)
+	uploaded := 0
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Name() == "messages.txt" {
+			continue
+		}
+		fileData, err := os.ReadFile(filepath.Join(tt.FilePath, entry.Name()))
+		if err != nil {
+			log.Printf("⚠️  uploadThreadData: read %s: %v", entry.Name(), err)
+			continue
+		}
+		assetURL, err := h.linear.UploadFile(ctx, entry.Name(), contentTypeForFile(entry.Name()), fileData)
+		if err != nil {
+			log.Printf("⚠️  uploadThreadData: upload %s: %v", entry.Name(), err)
+			continue
+		}
+		if err := h.linear.CreateAttachment(ctx, tt.LinearIssueID, entry.Name(), assetURL); err != nil {
+			log.Printf("⚠️  uploadThreadData: attachment %s: %v", entry.Name(), err)
+			continue
+		}
+		uploaded++
+	}
+
+	b.CloseForumTopic(ctx, &tgbot.CloseForumTopicParams{
+		ChatID:          chatID,
+		MessageThreadID: threadID,
+	})
+
+	os.RemoveAll(tt.FilePath)
+
+	elapsed := time.Since(start).Round(time.Second)
+	text := fmt.Sprintf("✅ Upload complete. Took %s.", elapsed)
+	if uploaded > 0 {
+		text = fmt.Sprintf("✅ Upload complete. Took %s. %d file(s) attached to the Linear issue.", elapsed, uploaded)
+	}
+	b.SendMessage(ctx, &tgbot.SendMessageParams{
+		ChatID:          chatID,
+		MessageThreadID: threadID,
+		Text:            text,
+	})
+	log.Printf("✓ Tech thread uploaded: %s (%d files, %s)", tt.LinearIssueURL, uploaded, elapsed)
 }

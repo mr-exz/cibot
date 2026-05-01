@@ -541,6 +541,127 @@ func (c *Client) CreateIssue(ctx context.Context, title, description, teamKey, a
 	}, nil
 }
 
+// UploadFile uploads raw file data to Linear via the fileUpload mutation and returns the asset URL.
+func (c *Client) UploadFile(ctx context.Context, filename, contentType string, data []byte) (string, error) {
+	payload := map[string]interface{}{
+		"query": `mutation FileUpload($contentType: String!, $filename: String!, $size: Int!) {
+			fileUpload(contentType: $contentType, filename: $filename, size: $size) {
+				uploadUrl
+				assetUrl
+				headers { key value }
+			}
+		}`,
+		"variables": map[string]interface{}{
+			"contentType": contentType,
+			"filename":    filename,
+			"size":        len(data),
+		},
+	}
+
+	reqBody, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.linear.app/graphql", bytes.NewReader(reqBody))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", c.apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data struct {
+			FileUpload struct {
+				UploadURL string `json:"uploadUrl"`
+				AssetURL  string `json:"assetUrl"`
+				Headers   []struct {
+					Key   string `json:"key"`
+					Value string `json:"value"`
+				} `json:"headers"`
+			} `json:"fileUpload"`
+		} `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", err
+	}
+	if len(result.Errors) > 0 {
+		return "", fmt.Errorf("Linear API: %s", result.Errors[0].Message)
+	}
+	fu := result.Data.FileUpload
+	if fu.UploadURL == "" {
+		return "", fmt.Errorf("fileUpload returned empty uploadUrl")
+	}
+
+	putReq, err := http.NewRequestWithContext(ctx, "PUT", fu.UploadURL, bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+	for _, h := range fu.Headers {
+		putReq.Header.Set(h.Key, h.Value)
+	}
+	putResp, err := c.httpClient.Do(putReq)
+	if err != nil {
+		return "", fmt.Errorf("upload PUT failed: %w", err)
+	}
+	putResp.Body.Close()
+	if putResp.StatusCode >= 300 {
+		return "", fmt.Errorf("upload PUT returned status %d", putResp.StatusCode)
+	}
+
+	return fu.AssetURL, nil
+}
+
+// CreateAttachment creates a Linear attachment linking an uploaded file to an issue.
+func (c *Client) CreateAttachment(ctx context.Context, issueID, title, assetURL string) error {
+	payload := map[string]interface{}{
+		"query": `mutation AttachmentCreate($issueId: String!, $title: String!, $url: String!) {
+			attachmentCreate(input: { issueId: $issueId, title: $title, url: $url }) {
+				success
+			}
+		}`,
+		"variables": map[string]interface{}{
+			"issueId": issueID,
+			"title":   title,
+			"url":     assetURL,
+		},
+	}
+
+	reqBody, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.linear.app/graphql", bytes.NewReader(reqBody))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", c.apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result struct {
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return err
+	}
+	if len(result.Errors) > 0 {
+		return fmt.Errorf("Linear API: %s", result.Errors[0].Message)
+	}
+	return nil
+}
+
 // CreateComment posts a markdown comment on a Linear issue.
 func (c *Client) CreateComment(ctx context.Context, issueID, body string) error {
 	payload := map[string]interface{}{

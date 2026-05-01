@@ -237,8 +237,6 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 		})
 		return
 	}
-	url := issue.URL
-
 	h.mu.Lock()
 	delete(h.states, stateKey{UserID: pending.UserID})
 	h.mu.Unlock()
@@ -259,17 +257,20 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 		Text: fmt.Sprintf(
 			"✅ Ticket created!\n\n"+
 				"📋 Category: %s\n"+
-				"👤 Assigned to: %s\n"+
-				"🔗 Linear: %s",
+				"👤 Assigned to: %s",
 			pending.CategoryName,
 			assigneeStr,
-			url,
 		),
+		ReplyMarkup: &models.InlineKeyboardMarkup{
+			InlineKeyboard: [][]models.InlineKeyboardButton{
+				{{Text: "Linear: " + issue.Identifier, URL: issue.URL}},
+			},
+		},
 	})
 
 	assignedPersonName := "unassigned"
 	if onDutyResult != nil && onDutyResult.Person != nil {
 		assignedPersonName = onDutyResult.Person.Name
 	}
-	log.Printf("✓ Ticket created: %s (assigned to %v)", url, assignedPersonName)
+	log.Printf("✓ Ticket created: %s (assigned to %v)", issue.URL, assignedPersonName)
 }
