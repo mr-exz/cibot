@@ -2,7 +2,8 @@
 
 ## [0.0.72]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- Linear file upload: `uploadUrl` and `assetUrl` are nested inside `uploadFile { ... }` on the `UploadPayload` type, not at the top level — fixes "must have a selection of subfields" error that caused all media uploads to fail
 
 
 ## [0.0.71]

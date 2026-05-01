@@ -546,9 +546,11 @@ func (c *Client) UploadFile(ctx context.Context, filename, contentType string, d
 	payload := map[string]interface{}{
 		"query": `mutation FileUpload($contentType: String!, $filename: String!, $size: Int!) {
 			fileUpload(contentType: $contentType, filename: $filename, size: $size) {
-				uploadFile
-				assetUrl
-				headers { key value }
+				uploadFile {
+					uploadUrl
+					assetUrl
+					headers { key value }
+				}
 			}
 		}`,
 		"variables": map[string]interface{}{
@@ -575,12 +577,14 @@ func (c *Client) UploadFile(ctx context.Context, filename, contentType string, d
 	var result struct {
 		Data struct {
 			FileUpload struct {
-				UploadURL string `json:"uploadFile"`
-				AssetURL  string `json:"assetUrl"`
-				Headers   []struct {
-					Key   string `json:"key"`
-					Value string `json:"value"`
-				} `json:"headers"`
+				UploadFile struct {
+					UploadURL string `json:"uploadUrl"`
+					AssetURL  string `json:"assetUrl"`
+					Headers   []struct {
+						Key   string `json:"key"`
+						Value string `json:"value"`
+					} `json:"headers"`
+				} `json:"uploadFile"`
 			} `json:"fileUpload"`
 		} `json:"data"`
 		Errors []struct {
@@ -594,7 +598,7 @@ func (c *Client) UploadFile(ctx context.Context, filename, contentType string, d
 	if len(result.Errors) > 0 {
 		return "", fmt.Errorf("Linear API: %s", result.Errors[0].Message)
 	}
-	fu := result.Data.FileUpload
+	fu := result.Data.FileUpload.UploadFile
 	if fu.UploadURL == "" {
 		return "", fmt.Errorf("fileUpload returned empty uploadUrl")
 	}
