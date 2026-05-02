@@ -3,7 +3,9 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -37,18 +39,10 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		body = replied.Caption
 	}
 
-	// Extract media links from the replied message
-	var mediaLinks []string
-	if len(replied.Photo) > 0 {
-		photo := replied.Photo[len(replied.Photo)-1]
-		if file, err := b.GetFile(ctx, &tgbot.GetFileParams{FileID: photo.FileID}); err == nil && file != nil {
-			mediaLinks = append(mediaLinks, fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", h.cfg.TelegramToken, file.FilePath))
-		}
-	}
-	if replied.Document != nil {
-		if file, err := b.GetFile(ctx, &tgbot.GetFileParams{FileID: replied.Document.FileID}); err == nil && file != nil {
-			mediaLinks = append(mediaLinks, fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", h.cfg.TelegramToken, file.FilePath))
-		}
+	// Extract media metadata from the replied message (downloaded and uploaded to Linear later)
+	var ticketMedia []*threadMedia
+	if meta := extractThreadMedia(replied); meta != nil {
+		ticketMedia = append(ticketMedia, meta)
 	}
 
 	isForward := replied.ForwardOrigin != nil
@@ -93,7 +87,7 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		TicketMsgLink:    link,
 		TicketMsgBody:    body,
 		TicketMsgDate:    time.Unix(int64(replied.Date), 0),
-		MediaLinks:       mediaLinks,
+		TicketMedia:      ticketMedia,
 		ReporterName:     reporterName,
 		ReporterUsername: reporterUsername,
 		RequesterLinear:  linearUsername,
@@ -160,6 +154,54 @@ func (h *Handler) buildUnconfiguredTopicMsg(ctx context.Context, chatID int64) s
 	return msg
 }
 
+// uploadTicketMedia downloads each media file from Telegram, uploads it to Linear, and returns
+// a markdown snippet with inline image previews (or plain links for non-images).
+func uploadTicketMedia(ctx context.Context, b *tgbot.Bot, h *Handler, media []*threadMedia) string {
+	if len(media) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	for _, meta := range media {
+		if meta.fileSize > maxThreadMediaSize {
+			log.Printf("⚠️  ticket media: %s too large (%d bytes), skipping", meta.filename, meta.fileSize)
+			continue
+		}
+		file, err := b.GetFile(ctx, &tgbot.GetFileParams{FileID: meta.fileID})
+		if err != nil {
+			log.Printf("⚠️  ticket media: GetFile failed: %v", err)
+			continue
+		}
+		dlURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", h.cfg.TelegramToken, file.FilePath)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, dlURL, nil)
+		if err != nil {
+			log.Printf("⚠️  ticket media: request error: %v", err)
+			continue
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			log.Printf("⚠️  ticket media: download failed: %v", err)
+			continue
+		}
+		data, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			log.Printf("⚠️  ticket media: read failed: %v", err)
+			continue
+		}
+		assetURL, err := h.linear.UploadFile(ctx, meta.filename, meta.contentType, data)
+		if err != nil {
+			log.Printf("⚠️  ticket media: Linear upload failed: %v", err)
+			continue
+		}
+		if strings.HasPrefix(meta.contentType, "image/") {
+			sb.WriteString(fmt.Sprintf("\n\n![%s](%s)", meta.filename, assetURL))
+		} else {
+			sb.WriteString(fmt.Sprintf("\n\n[%s](%s)", meta.filename, assetURL))
+		}
+	}
+	return sb.String()
+}
+
 // ticketTitle builds a Linear issue title from the first 5 words of the message body and its date.
 func ticketTitle(body string, date time.Time) string {
 	words := strings.Fields(body)
@@ -198,15 +240,15 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 		pending.TypeName,
 		pending.TicketMsgLink)
 
-	if pending.TicketMsgBody != "" || len(pending.MediaLinks) > 0 {
+	if pending.TicketMsgBody != "" || len(pending.TicketMedia) > 0 {
 		var msgSection string
 		if pending.TicketMsgBody != "" {
 			msgSection = fmt.Sprintf("**💬 Message**\n%s", pending.TicketMsgBody)
 		} else {
 			msgSection = "**💬 Message**"
 		}
-		if len(pending.MediaLinks) > 0 {
-			msgSection += formatMediaLinks(pending.MediaLinks)
+		if len(pending.TicketMedia) > 0 {
+			msgSection += uploadTicketMedia(ctx, b, h, pending.TicketMedia)
 		}
 		description = msgSection + "\n\n" + description
 	}

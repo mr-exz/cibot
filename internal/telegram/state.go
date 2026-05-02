@@ -131,6 +131,7 @@ type pendingSession struct {
 	ReporterUsername string
 	ReporterName     string
 	RequesterLinear  string // Linear username of the person who ran /ticket; empty if not linked
+	TicketMedia      []*threadMedia
 }
 
 // pendingAdminSession represents an in-progress admin configuration session

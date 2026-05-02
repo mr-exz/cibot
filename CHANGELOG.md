@@ -2,7 +2,8 @@
 
 ## [0.0.76]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/ticket`: when the replied-to message contains media (photo, video, audio, voice, document, animation, video note), the file is now downloaded from Telegram, uploaded to Linear, and embedded directly in the issue description as `![name](url)` for images or `[name](url)` for other files — same inline-preview approach as tech thread close; files over 25 MB are skipped
 
 
 ## [0.0.75]
