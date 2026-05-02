@@ -2,7 +2,8 @@
 
 ## [0.0.77]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/thread`: when the replied-to message contains media, the file is now downloaded from Telegram, uploaded to Linear, and embedded in the issue description — same behaviour as `/ticket` (added in 0.0.76)
 
 
 ## [0.0.76]

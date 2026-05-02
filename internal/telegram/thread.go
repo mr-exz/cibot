@@ -50,6 +50,11 @@ func (h *Handler) handleThread(ctx context.Context, b *tgbot.Bot, msg *models.Me
 		body = replied.Caption
 	}
 
+	var ticketMedia []*threadMedia
+	if meta := extractThreadMedia(replied); meta != nil {
+		ticketMedia = append(ticketMedia, meta)
+	}
+
 	reporterName := ""
 	reporterUsername := ""
 	if replied.From != nil {
@@ -90,6 +95,7 @@ func (h *Handler) handleThread(ctx context.Context, b *tgbot.Bot, msg *models.Me
 		TicketMsgBody:    body,
 		TicketMsgDate:    time.Unix(int64(replied.Date), 0),
 		SourceMsgID:      replied.ID,
+		TicketMedia:      ticketMedia,
 		ReporterName:     reporterName,
 		ReporterUsername: reporterUsername,
 	}
@@ -113,8 +119,9 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 		title = fmt.Sprintf("Thread from Telegram (%s)", pending.TicketMsgDate.Format("2006-01-02 15:04"))
 	}
 
-	description := fmt.Sprintf("**Reporter:** %s\n**Category:** %s\n**Source:** %s\n\n%s",
-		reporter, pending.CategoryName, pending.TicketMsgLink, pending.TicketMsgBody)
+	mediaMarkdown := uploadTicketMedia(ctx, b, h, pending.TicketMedia)
+	description := fmt.Sprintf("**Reporter:** %s\n**Category:** %s\n**Source:** %s\n\n%s%s",
+		reporter, pending.CategoryName, pending.TicketMsgLink, pending.TicketMsgBody, mediaMarkdown)
 
 	onDutyResult, err := h.storage.GetOnDutyPersonResult(ctx, pending.CategoryID, time.Now())
 	if err != nil {
