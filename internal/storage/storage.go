@@ -1005,3 +1005,37 @@ func (d *DB) CreateInitialAssignment(ctx context.Context, categoryID int64, supp
 		categoryID, supportPersonID, rotationType, startDate)
 	return err
 }
+
+// === Settings ===
+
+func (d *DB) GetSetting(ctx context.Context, key string) (string, bool, error) {
+	var value string
+	err := d.db.QueryRowContext(ctx, "SELECT value FROM settings WHERE key = ?", key).Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	return value, err == nil, err
+}
+
+func (d *DB) SetSetting(ctx context.Context, key, value string) error {
+	_, err := d.db.ExecContext(ctx,
+		"INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+		key, value)
+	return err
+}
+
+func (d *DB) GetReminderEnabled(ctx context.Context) (bool, error) {
+	val, ok, err := d.GetSetting(ctx, "reminder_enabled")
+	if err != nil || !ok {
+		return false, err
+	}
+	return val == "1", nil
+}
+
+func (d *DB) SetReminderEnabled(ctx context.Context, enabled bool) error {
+	val := "0"
+	if enabled {
+		val = "1"
+	}
+	return d.SetSetting(ctx, "reminder_enabled", val)
+}

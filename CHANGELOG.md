@@ -2,7 +2,15 @@
 
 ## [0.0.78]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- Daily on-duty reminders: at the start of each on-duty person's shift (their configured `work_hours` start in their timezone), the bot posts a reminder in the support topic (or group if no topic) listing who is on duty and for which category
+- `/reminder_on` (admin DM) — enables reminders globally and prints the schedule for today and tomorrow: time, person, category, and destination group/topic
+- `/reminder_off` (admin DM) — disables all reminders
+- Reminders survive bot restarts — scheduler recomputes the day's plan on startup; categories with no assigned persons are skipped automatically
+- Reminder scheduler tracks active timers and cancels them before rescheduling — prevents double-pinging if `/reminder_on` is called more than once in the same day
+
+### Changed
+- Linear username is no longer shown in ticket/support issue descriptions and the "not linked to Linear" warning is no longer shown during `/ticket` and `/ticket_manual` flows; `/mylinear` command still works and stores the username for potential future use
 
 
 ## [0.0.77]

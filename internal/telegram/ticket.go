@@ -70,12 +70,12 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		return
 	}
 
-	linearUsername, _ := h.storage.GetUserLinearUsername(ctx, msg.From.ID)
+	// linearUsername, _ := h.storage.GetUserLinearUsername(ctx, msg.From.ID)
 
 	text := "🗂️ Select category for this ticket:"
-	if linearUsername == "" {
-		text = "⚠️ Your Telegram account is not linked to Linear. Use /mylinear to link it.\n\n" + text
-	}
+	// if linearUsername == "" {
+	// 	text = "⚠️ Your Telegram account is not linked to Linear. Use /mylinear to link it.\n\n" + text
+	// }
 
 	session := &pendingSession{
 		Flow:             FlowTicket,
@@ -90,7 +90,7 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		TicketMedia:      ticketMedia,
 		ReporterName:     reporterName,
 		ReporterUsername: reporterUsername,
-		RequesterLinear:  linearUsername,
+		// RequesterLinear:  linearUsername,
 	}
 
 	var sentMsg *models.Message
@@ -226,9 +226,9 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 	if pending.ReporterUsername != "" {
 		reporter = fmt.Sprintf("[%s](https://t.me/%s)", pending.ReporterName, pending.ReporterUsername)
 	}
-	if pending.RequesterLinear != "" {
-		reporter += fmt.Sprintf(" / Linear: %s", pending.RequesterLinear)
-	}
+	// if pending.RequesterLinear != "" {
+	// 	reporter += fmt.Sprintf(" / Linear: %s", pending.RequesterLinear)
+	// }
 
 	description := fmt.Sprintf("**📌 Telegram Source**\n"+
 		"- **Reporter:** %s\n"+

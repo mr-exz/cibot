@@ -150,6 +150,20 @@ func (h *Handler) registerCommands() []commandDef {
 			Handler:   h.handleDNS,
 		},
 		{
+			Name:      "reminder_on",
+			Desc:      "Enable daily on-duty reminders and show the schedule",
+			Group:     "Admin",
+			AdminOnly: true,
+			Handler:   h.handleReminderOn,
+		},
+		{
+			Name:      "reminder_off",
+			Desc:      "Disable daily on-duty reminders",
+			Group:     "Admin",
+			AdminOnly: true,
+			Handler:   h.handleReminderOff,
+		},
+		{
 			Name:      "thread",
 			GroupDesc: "Reply to a message to escalate it as a technical thread",
 			Group:     "Support",

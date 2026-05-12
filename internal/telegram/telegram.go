@@ -28,30 +28,34 @@ type Handler struct {
 	version             string
 	msglog              *msglog.Logger
 	mu                  sync.Mutex
-	states              map[stateKey]interface{}       // can hold *pendingSession or *pendingAdminSession
-	topics              map[int64]map[int]string       // chat_id -> (thread_id -> topic_name)
-	groups              map[int64]string               // chat_id -> group title (discovered from messages)
-	knownUsers          map[int64]string               // user_id -> "username\x00first\x00last" fingerprint; skip DB write if unchanged
+	states              map[stateKey]interface{} // can hold *pendingSession or *pendingAdminSession
+	topics              map[int64]map[int]string // chat_id -> (thread_id -> topic_name)
+	groups              map[int64]string         // chat_id -> group title (discovered from messages)
+	knownUsers          map[int64]string         // user_id -> "username\x00first\x00last" fingerprint; skip DB write if unchanged
 	techThreads         map[string]*activeThread // "chatID:threadID" -> open thread
-	techGroupInviteLink string                         // cached permanent invite link for the tech group
+	techGroupInviteLink string                   // cached permanent invite link for the tech group
 	cmdRegistry         []commandDef
 	cmdHandlers         map[string]cmdHandler
-	dns                 *pskzdns.Client // experimental DNS management
+	dns                 *pskzdns.Client        // experimental DNS management
+	reminderCh          chan struct{}          // signals the reminder scheduler to recompute immediately
+	reminderTimers      map[string]*time.Timer // key "chatID:threadID:fireAt" → active timer; only accessed from scheduler goroutine
 }
 
 func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *config.Config, version string) (*tgbot.Bot, error) {
 	h := &Handler{
-		linear:      linearClient,
-		storage:     db,
-		cfg:         cfg,
-		version:     version,
-		msglog:      msglog.New(cfg.CSVPath),
-		states:      make(map[stateKey]interface{}),
-		topics:      make(map[int64]map[int]string),
-		groups:      make(map[int64]string),
-		knownUsers:  make(map[int64]string),
-		techThreads: make(map[string]*activeThread),
-		cmdHandlers: make(map[string]cmdHandler),
+		linear:         linearClient,
+		storage:        db,
+		cfg:            cfg,
+		version:        version,
+		msglog:         msglog.New(cfg.CSVPath),
+		states:         make(map[stateKey]interface{}),
+		topics:         make(map[int64]map[int]string),
+		groups:         make(map[int64]string),
+		knownUsers:     make(map[int64]string),
+		techThreads:    make(map[string]*activeThread),
+		cmdHandlers:    make(map[string]cmdHandler),
+		reminderCh:     make(chan struct{}, 1),
+		reminderTimers: make(map[string]*time.Timer),
 	}
 
 	// Load open tech threads into memory so message tracking works after restart
@@ -141,6 +145,7 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "dns_confirm:", tgbot.MatchTypePrefix, h.handleDNSConfirmCallback)
 
 	go h.sessionReaper(ctx)
+	go h.startReminderScheduler(ctx, b)
 
 	return b, nil
 }

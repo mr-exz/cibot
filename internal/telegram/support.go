@@ -32,13 +32,13 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 		return
 	}
 
-	linearUsername, _ := h.storage.GetUserLinearUsername(ctx, msg.From.ID)
+	// linearUsername, _ := h.storage.GetUserLinearUsername(ctx, msg.From.ID)
 	reporterName := strings.TrimSpace(msg.From.FirstName + " " + msg.From.LastName)
 
 	text := "📝 Describe your issue (you can also attach a photo or file):"
-	if linearUsername == "" {
-		text = "⚠️ Your Telegram account is not linked to Linear. Use /mylinear to link it.\n\n" + text
-	}
+	// if linearUsername == "" {
+	// 	text = "⚠️ Your Telegram account is not linked to Linear. Use /mylinear to link it.\n\n" + text
+	// }
 
 	session := &pendingSession{
 		Flow:             FlowSupport,
@@ -49,8 +49,8 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 		CreatedAt:        time.Now(),
 		ReporterName:     reporterName,
 		ReporterUsername: msg.From.Username,
-		RequesterLinear:  linearUsername,
-		ChatTitle:        msg.Chat.Title,
+		// RequesterLinear:  linearUsername,
+		ChatTitle: msg.Chat.Title,
 	}
 
 	params := &tgbot.SendMessageParams{
@@ -420,9 +420,9 @@ func (h *Handler) createSupportIssue(ctx context.Context, b *tgbot.Bot, pending 
 	if pending.ReporterUsername != "" {
 		reporter = fmt.Sprintf("[%s](https://t.me/%s)", pending.ReporterName, pending.ReporterUsername)
 	}
-	if pending.RequesterLinear != "" {
-		reporter += fmt.Sprintf(" / Linear: %s", pending.RequesterLinear)
-	}
+	// if pending.RequesterLinear != "" {
+	// 	reporter += fmt.Sprintf(" / Linear: %s", pending.RequesterLinear)
+	// }
 
 	tgLink := formatTelegramLink(pending.ChatID, pending.ThreadID, pending.SupportMsgID)
 	description := pending.Description + fmt.Sprintf("\n\n---\n\n**📌 Telegram Source**\n"+
