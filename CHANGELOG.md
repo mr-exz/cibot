@@ -2,7 +2,11 @@
 
 ## [0.0.79]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- Status system simplified to three states: **online** (no status), **busy** 🔴 (temporarily unavailable — still assigned in rotation, tasks stay on them), **absent** 🏖 (out for the day — fully removed from rotation, next person takes over)
+- Removed lunch, brb, and away statuses — replaced by a single "busy" state; existing DB records for old statuses display as "Busy" automatically
+- `/status` keyboard now shows two buttons: Busy and Absent, plus Back
+- `/status` now shows the full Mon–Sun rotation schedule for every category the person belongs to, with the current day marked and their own duty days highlighted as "(you)"
 
 
 ## [0.0.78]

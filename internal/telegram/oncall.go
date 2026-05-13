@@ -9,6 +9,7 @@ import (
 
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+	"github.com/mr-exz/cibot/internal/storage"
 )
 
 func (h *Handler) handleOnCall(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
@@ -162,24 +163,66 @@ func (h *Handler) handleSetStatus(ctx context.Context, b *tgbot.Bot, msg *models
 		statusLine = "Status: 🔴 Offline (outside work hours)"
 	}
 
-	// Find categories this person is currently on duty for
+	// Find all categories this person is in the pool for
 	rotations, _ := h.storage.ListAllRotations(ctx, now)
-	var onDutyLines []string
-	for _, r := range rotations {
-		if r.OnDuty != nil && r.OnDuty.ID == person.ID {
-			onDutyLines = append(onDutyLines, fmt.Sprintf("  %s %s", r.Category.Emoji, r.Category.Name))
+
+	// Person's timezone for local week calculation
+	loc := time.UTC
+	if person.Timezone != "" {
+		if parsed, err := storage.ParseTimezone(person.Timezone); err == nil {
+			loc = parsed
 		}
 	}
+	localNow := now.In(loc)
+
+	// Monday of the current week
+	isoWeekday := int(localNow.Weekday())
+	if isoWeekday == 0 {
+		isoWeekday = 7
+	}
+	monday := time.Date(localNow.Year(), localNow.Month(), localNow.Day()-isoWeekday+1, 12, 0, 0, 0, loc)
 
 	var sb strings.Builder
 	sb.WriteString(statusLine + "\n")
-	if len(onDutyLines) > 0 {
-		sb.WriteString("\nOn duty now:\n")
-		for _, l := range onDutyLines {
-			sb.WriteString(l + "\n")
+
+	dayNames := []string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+
+	for _, rot := range rotations {
+		inPool := false
+		for _, p := range rot.AllPersons {
+			if p.ID == person.ID {
+				inPool = true
+				break
+			}
 		}
-	} else {
-		sb.WriteString("\nNot on duty right now.\n")
+		if !inPool {
+			continue
+		}
+
+		sb.WriteString(fmt.Sprintf("\n%s %s — week of %s:\n", rot.Category.Emoji, rot.Category.Name, monday.Format("Jan 2")))
+		for i, dayName := range dayNames {
+			day := monday.AddDate(0, 0, i)
+			result, err := h.storage.GetOnDutyPersonResult(ctx, rot.Category.ID, day)
+			if err != nil || result == nil || result.Person == nil {
+				sb.WriteString(fmt.Sprintf("  %s %d — ?\n", dayName, day.Day()))
+				continue
+			}
+			yours := result.Person.ID == person.ID
+			todayMark := day.Year() == localNow.Year() && day.Month() == localNow.Month() && day.Day() == localNow.Day()
+
+			line := fmt.Sprintf("  %s %d — @%s", dayName, day.Day(), result.Person.TelegramUsername)
+			if yours {
+				line += " (you)"
+			}
+			if todayMark {
+				line += " ← today"
+			}
+			sb.WriteString(line + "\n")
+		}
+	}
+
+	if len(rotations) == 0 {
+		sb.WriteString("\nNot assigned to any category.\n")
 	}
 	sb.WriteString("\nChange status:")
 
@@ -240,7 +283,11 @@ func (h *Handler) handleStatusCallback(ctx context.Context, b *tgbot.Bot, update
 			log.Printf("❌ SetPersonStatus for person %d: %v", person.ID, err)
 		}
 		h.setTagInAllGroups(ctx, query.From.ID, query.From.Username, statusTag(status))
-		reply = "Status set to: " + statusTag(status) + ". Use /status back when you return."
+		if status == "absent" {
+			reply = "You are marked as absent. Rotation is reassigned to the next person. Use /status back when you return."
+		} else {
+			reply = "Status set to: " + statusTag(status) + ". Use /status back when you return."
+		}
 	}
 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
@@ -267,11 +314,10 @@ func buildStatusKeyboard() *models.InlineKeyboardMarkup {
 	return &models.InlineKeyboardMarkup{
 		InlineKeyboard: [][]models.InlineKeyboardButton{
 			{
-				{Text: "🍽 Lunch", CallbackData: "setstatus:lunch"},
-				{Text: "⏸ BRB", CallbackData: "setstatus:brb"},
+				{Text: "🔴 Busy", CallbackData: "setstatus:busy"},
+				{Text: "🏖 Absent", CallbackData: "setstatus:absent"},
 			},
 			{
-				{Text: "🚫 Away", CallbackData: "setstatus:away"},
 				{Text: "🟢 Back", CallbackData: "setstatus:back"},
 			},
 		},
@@ -280,12 +326,10 @@ func buildStatusKeyboard() *models.InlineKeyboardMarkup {
 
 func statusEmoji(status string) string {
 	switch status {
-	case "lunch":
-		return "🍽"
-	case "brb":
-		return "⏸"
-	case "away":
-		return "🚫"
+	case "busy", "lunch", "brb", "away":
+		return "🔴"
+	case "absent":
+		return "🏖"
 	default:
 		return "❓"
 	}
@@ -293,12 +337,10 @@ func statusEmoji(status string) string {
 
 func statusTag(status string) string {
 	switch status {
-	case "lunch":
-		return "On lunch"
-	case "brb":
-		return "BRB"
-	case "away":
-		return "Away"
+	case "busy", "lunch", "brb", "away":
+		return "Busy"
+	case "absent":
+		return "Absent"
 	default:
 		return ""
 	}

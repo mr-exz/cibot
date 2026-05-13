@@ -638,15 +638,26 @@ func (d *DB) GetOnDutyPersonResult(ctx context.Context, categoryID int64, now ti
 	daysElapsed := int(now.Sub(start) / (24 * time.Hour))
 	slot := (daysElapsed / period) % len(pool)
 
-	// Walk forward from slot, find first online person
+	// Walk forward from slot: skip absent persons, return first online non-absent person.
 	for i := 0; i < len(pool); i++ {
 		candidate := pool[(slot+i)%len(pool)]
+		if candidate.Status == "absent" {
+			continue
+		}
 		if IsPersonOnline(candidate, now) {
 			return &OnDutyResult{Person: &candidate, Online: true}, nil
 		}
 	}
 
-	// Nobody online: return slot person with Online=false
+	// No online non-absent person: return first non-absent person as offline fallback.
+	for i := 0; i < len(pool); i++ {
+		candidate := pool[(slot+i)%len(pool)]
+		if candidate.Status != "absent" {
+			return &OnDutyResult{Person: &candidate, Online: false}, nil
+		}
+	}
+
+	// Everyone is absent: fall back to slot person.
 	return &OnDutyResult{Person: &pool[slot], Online: false}, nil
 }
 

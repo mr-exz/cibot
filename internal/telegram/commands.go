@@ -68,7 +68,7 @@ func (h *Handler) registerCommands() []commandDef {
 		{
 			Name:      "status",
 			Desc:      "Check and update your on-call availability",
-			GroupDesc: "Set your availability (lunch, brb, away, back)",
+			GroupDesc: "Set your availability (busy, absent, back)",
 			Group:     "Support",
 			Handler:   h.handleSetStatus,
 		},
