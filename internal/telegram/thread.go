@@ -219,28 +219,39 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 	delete(h.states, stateKey{UserID: pending.UserID})
 	h.mu.Unlock()
 
-	confirmText := "✅ Thread opened! Click \"Join tech group\" below to join and continue the conversation in the dedicated topic."
+	confirmText := "✅ Thread opened! Here's what to do next:\n\n" +
+		"1️⃣ Join the tech group\n" +
+		"2️⃣ Go to the topic to chat about the case\n" +
+		"3️⃣ Use /close when done to update the Linear task\n"
+
 	if onDutyResult != nil && !onDutyResult.Online {
-		confirmText += "\n\n⚠️ Assigned person is currently outside working hours."
+		confirmText += "\n⚠️ Assigned person is currently outside working hours."
 	}
 
 	topicLink := telegramTopicLink(h.cfg.TechGroupID, topic.MessageThreadID)
 	inviteLink := h.getTechGroupInviteLink(ctx, b)
 
-	buttons := []models.InlineKeyboardButton{
-		{Text: "Linear: " + issue.Identifier, URL: issue.URL},
-		{Text: "Telegram: " + issue.Identifier, URL: topicLink},
-	}
+	// Build buttons grid: [join, go-to-topic], [linear, close-info]
+	var buttons [][]models.InlineKeyboardButton
+
+	row1 := []models.InlineKeyboardButton{}
 	if inviteLink != "" {
-		buttons = append(buttons, models.InlineKeyboardButton{Text: "Join tech group", URL: inviteLink})
+		row1 = append(row1, models.InlineKeyboardButton{Text: "1 Join group", URL: inviteLink})
 	}
+	row1 = append(row1, models.InlineKeyboardButton{Text: "2 Go to topic", URL: topicLink})
+	buttons = append(buttons, row1)
+
+	row2 := []models.InlineKeyboardButton{
+		{Text: "📋 Linear: " + issue.Identifier, URL: issue.URL},
+	}
+	buttons = append(buttons, row2)
 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    pending.ChatID,
 		MessageID: pending.MessageID,
 		Text:      confirmText,
 		ReplyMarkup: &models.InlineKeyboardMarkup{
-			InlineKeyboard: [][]models.InlineKeyboardButton{buttons},
+			InlineKeyboard: buttons,
 		},
 	})
 	log.Printf("✓ Tech thread created: %s (topic %d in chat %d)", issue.Identifier, topic.MessageThreadID, h.cfg.TechGroupID)

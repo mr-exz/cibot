@@ -2,7 +2,9 @@
 
 ## [0.0.80]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- `/thread` confirmation message now shows clear numbered steps explaining the workflow: ①Join the tech group → ②Go to topic → ③Use /close when done; numbered action buttons guide users through each step (e.g. "1 Join group", "2 Go to topic")
+- Daily on-duty reminders now include working hours and timezone for each person, converted to the group's configured timezone (same format as `/oncall` command); reminders are silent for persons outside their working hours or on non-working days — `IsPersonOnline()` check filters them out before scheduling
 
 
 ## [0.0.79]

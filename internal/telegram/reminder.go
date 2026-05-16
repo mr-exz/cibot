@@ -111,6 +111,11 @@ func (h *Handler) buildReminderPlan(ctx context.Context, forDate time.Time) ([]s
 			continue
 		}
 
+		// Skip reminders for people who are not currently working
+		if !storage.IsPersonOnline(*person, forDate) {
+			continue
+		}
+
 		startMin, _, err := storage.ParseWorkHours(person.WorkHours)
 		if err != nil {
 			continue
@@ -157,10 +162,21 @@ func (h *Handler) buildReminderPlan(ctx context.Context, forDate time.Time) ([]s
 }
 
 func (h *Handler) fireReminder(ctx context.Context, b *tgbot.Bot, r scheduledReminder) {
+	// Get group timezone for this destination
+	groupTZ := "UTC"
+	if tz, err := h.storage.GetGroupTimezone(ctx, r.chatID); err == nil && tz != "" {
+		groupTZ = tz
+	}
+
 	var sb strings.Builder
 	sb.WriteString("🔔 On duty today:\n")
 	for _, e := range r.entries {
-		sb.WriteString(fmt.Sprintf("• @%s — %s\n", e.person.TelegramUsername, e.categoryName))
+		line := fmt.Sprintf("• @%s — %s", e.person.TelegramUsername, e.categoryName)
+		if e.person.WorkHours != "" && e.person.Timezone != "" {
+			displayHours := convertWorkHours(e.person.WorkHours, e.person.Timezone, groupTZ)
+			line += fmt.Sprintf(" (hours: %s %s)", displayHours, groupTZ)
+		}
+		sb.WriteString(line + "\n")
 	}
 
 	params := &tgbot.SendMessageParams{
