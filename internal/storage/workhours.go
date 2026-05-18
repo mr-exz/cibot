@@ -179,6 +179,41 @@ func ParseTimezone(s string) (*time.Location, error) {
 	return time.FixedZone("", offsetSeconds), nil
 }
 
+// IsPersonScheduledForDay returns true if the person is scheduled to work on the given date
+// (checks work_days only, ignoring time of day). Returns true if any schedule field is empty.
+func IsPersonScheduledForDay(p SupportPerson, date time.Time) bool {
+	// If any working field is empty, person is always available
+	if p.Timezone == "" || p.WorkDays == "" {
+		return true
+	}
+
+	// Parse timezone
+	loc, err := ParseTimezone(p.Timezone)
+	if err != nil {
+		// If timezone parsing fails, assume available
+		return true
+	}
+
+	// Convert to person's local time to get the correct day of week
+	localDate := date.In(loc)
+
+	// Check work days
+	days, err := ParseWorkDays(p.WorkDays)
+	if err != nil {
+		// If parsing fails, assume available
+		return true
+	}
+
+	// Go's Weekday: Sunday=0, Monday=1, ..., Saturday=6
+	// ISO 8601: Monday=1, ..., Sunday=7
+	isoDay := int(localDate.Weekday())
+	if isoDay == 0 {
+		isoDay = 7 // Convert Sunday from 0 to 7
+	}
+
+	return days[isoDay]
+}
+
 // IsPersonOnline returns true if the person is currently within their working hours.
 // Returns true (always available) if any of the three schedule fields is empty.
 func IsPersonOnline(p SupportPerson, now time.Time) bool {

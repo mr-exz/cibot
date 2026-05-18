@@ -111,8 +111,8 @@ func (h *Handler) buildReminderPlan(ctx context.Context, forDate time.Time) ([]s
 			continue
 		}
 
-		// Skip reminders for people who are not currently working
-		if !storage.IsPersonOnline(*person, forDate) {
+		// Skip reminders for people not scheduled to work on this day
+		if !storage.IsPersonScheduledForDay(*person, forDate) {
 			continue
 		}
 

@@ -2,7 +2,8 @@
 
 ## [0.0.81]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- Daily on-duty reminders now correctly scheduled for all working days — previous implementation incorrectly checked if persons were online at midnight on the reminder date, now checks only if they're scheduled to work that day per `work_days` (so weekend workers get reminders on Saturday/Sunday, weekday workers on Mon–Fri)
 
 
 ## [0.0.80]
