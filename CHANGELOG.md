@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.84]
+
+<!-- Prepare for next release: remove this line and write your release notes -->
+
+
 ## [0.0.83]
 
 ### Fixed
