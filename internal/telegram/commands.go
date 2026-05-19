@@ -189,6 +189,13 @@ func (h *Handler) registerCommands() []commandDef {
 			AdminOnly: true,
 			Handler:   h.handleListTopics,
 		},
+		{
+			Name:      "takeover",
+			Desc:      "Override who is on duty for a category",
+			Group:     "Admin",
+			AdminOnly: true,
+			Handler:   h.handleTakeover,
+		},
 	}
 }
 

@@ -207,12 +207,22 @@ func (h *Handler) handleSetStatus(ctx context.Context, b *tgbot.Bot, msg *models
 				sb.WriteString(fmt.Sprintf("  %s %d — ?\n", dayName, day.Day()))
 				continue
 			}
+
+			// Check if this is a working day for the on-duty person
+			if !storage.IsPersonScheduledForDay(*result.Person, day) {
+				sb.WriteString(fmt.Sprintf("  %s %d — Weekend (no support)\n", dayName, day.Day()))
+				continue
+			}
+
 			yours := result.Person.ID == person.ID
 			todayMark := day.Year() == localNow.Year() && day.Month() == localNow.Month() && day.Day() == localNow.Day()
 
 			line := fmt.Sprintf("  %s %d — @%s", dayName, day.Day(), result.Person.TelegramUsername)
 			if yours {
 				line += " (you)"
+			}
+			if result.Person.WorkHours != "" {
+				line += fmt.Sprintf(" (%s %s)", result.Person.WorkHours, result.Person.Timezone)
 			}
 			if todayMark {
 				line += " ← today"

@@ -28,6 +28,7 @@ const (
 	AdminCmdOffboard            AdminCmd = "offboard"
 	AdminCmdDNS                 AdminCmd = "dns"
 	AdminCmdAddPersonToCategory AdminCmd = "addpersontocategory"
+	AdminCmdTakeover            AdminCmd = "takeover"
 )
 
 // Step constants for the multi-step issue creation flow
@@ -87,6 +88,10 @@ const (
 	// offboard steps
 	StepOffboardUsername = "offboard_username"
 	StepOffboardConfirm  = "offboard_confirm"
+
+	// takeover steps
+	StepAdminTakeoverPerson   = "admin_takeover_person"
+	StepAdminTakeoverDuration = "admin_takeover_duration"
 
 	// dns steps
 	StepDNSMenu       = "dns_menu"
@@ -185,4 +190,10 @@ type pendingAdminSession struct {
 	DNSRecordTTL   int
 	DNSRecordID    string      // selected record ID for delete flow
 	DNSRecords     []dnsRecord // fetched records for delete flow
+
+	// takeover fields
+	TakeoverPersonID   int64
+	TakeoverPersonName string
+	TakeoverFromDate   string // YYYY-MM-DD
+	TakeoverUntilDate  string // YYYY-MM-DD
 }

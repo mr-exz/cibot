@@ -392,6 +392,12 @@ func (h *Handler) finalizeAddPerson(ctx context.Context, b *tgbot.Bot, admin *pe
 		return
 	}
 
+	// Recalibrate rotation to preserve current on-duty person
+	now := time.Now()
+	if err := h.storage.RecalibrateRotation(ctx, admin.CategoryID, now); err != nil {
+		log.Printf("⚠️  RecalibrateRotation failed: %v", err)
+	}
+
 	h.mu.Lock()
 	delete(h.states, stateKey{UserID: userID})
 	h.mu.Unlock()
@@ -732,11 +738,20 @@ func (h *Handler) handleAdminCategoryCallback(ctx context.Context, b *tgbot.Bot,
 				Text:      fmt.Sprintf("❌ Failed to add to category: %v", err),
 			})
 		} else {
+			// Recalibrate rotation to preserve current on-duty person
+			now := time.Now()
+			if err := h.storage.RecalibrateRotation(ctx, cat.ID, now); err != nil {
+				log.Printf("⚠️  RecalibrateRotation failed: %v", err)
+			}
 			h.mu.Lock()
 			delete(h.states, stateKey{UserID: admin.UserID})
 			h.mu.Unlock()
 			h.showPersonDetail(ctx, b, admin.ChatID, admin.MessageID, admin.PersonID)
 		}
+
+	case AdminCmdTakeover:
+		// Delegate to takeover handler
+		h.handleTakeoverCategorySelected(ctx, b, admin, cat)
 	}
 }
 

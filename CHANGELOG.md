@@ -2,7 +2,15 @@
 
 ## [0.0.82]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/takeover` (admin DM) — override who is on duty for a category and date range; admin selects category → person → duration (today, until Friday, or this week) and can later clear the override to resume normal rotation
+
+### Fixed
+- Rotation stability: when a person is added to or removed from a category's on-duty pool, `RecalibrateRotation()` is called to preserve the current on-duty person's assignment — prevents the rotation from shifting and reassigning yesterday's person due to the `len(pool)` modulo change
+
+### Changed
+- `/status` now shows each person's working hours and timezone for the week schedule, e.g. `Mon 19 — @alice (09:00-18:00 +05:00) ← today`
+- `/status` now marks days outside a person's `work_days` as `Weekend (no support)` — weekend days in the rotation schedule show a marker instead of an assigned person
 
 
 ## [0.0.81]

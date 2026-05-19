@@ -144,6 +144,9 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "dns_rec:", tgbot.MatchTypePrefix, h.handleDNSRecCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "dns_confirm:", tgbot.MatchTypePrefix, h.handleDNSConfirmCallback)
 
+	// takeover callbacks
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "takeover:", tgbot.MatchTypePrefix, h.handleTakeoverCallback)
+
 	go h.sessionReaper(ctx)
 	go h.startReminderScheduler(ctx, b)
 

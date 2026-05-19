@@ -575,7 +575,13 @@ func (d *DB) RemovePersonFromCategory(ctx context.Context, personID, categoryID 
 	_, err := d.db.ExecContext(ctx,
 		"DELETE FROM support_assignments WHERE support_person_id = ? AND category_id = ?",
 		personID, categoryID)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Recalibrate rotation to preserve current on-duty person
+	now := time.Now()
+	return d.RecalibrateRotation(ctx, categoryID, now)
 }
 
 func (d *DB) DeleteSupportPerson(ctx context.Context, personID int64) error {
@@ -602,6 +608,11 @@ func (d *DB) GetOnDutyPerson(ctx context.Context, categoryID int64, today time.T
 }
 
 func (d *DB) GetOnDutyPersonResult(ctx context.Context, categoryID int64, now time.Time) (*OnDutyResult, error) {
+	// Check for active takeover first
+	if tp, err := d.GetActiveTakeover(ctx, categoryID, now); err == nil && tp != nil {
+		return &OnDutyResult{Person: tp, Online: IsPersonOnline(*tp, now)}, nil
+	}
+
 	// Get all support persons for the category
 	pool, err := d.ListSupportPersonsForCategory(ctx, categoryID)
 	if err != nil {
@@ -1014,6 +1025,136 @@ func (d *DB) CreateInitialAssignment(ctx context.Context, categoryID int64, supp
 	_, err := d.db.ExecContext(ctx,
 		"INSERT INTO support_assignments (category_id, support_person_id, rotation_type, start_date) VALUES (?, ?, ?, ?)",
 		categoryID, supportPersonID, rotationType, startDate)
+	return err
+}
+
+// RecalibrateRotation ensures the same person remains on duty after pool changes.
+// When a person is added/removed from a category, this recalculates start_date so
+// the currently on-duty person (if still in pool) stays on duty.
+func (d *DB) RecalibrateRotation(ctx context.Context, categoryID int64, now time.Time) error {
+	// Get current on-duty person and their index (before/with current pool)
+	oldPool, err := d.ListSupportPersonsForCategory(ctx, categoryID)
+	if err != nil || len(oldPool) == 0 {
+		return nil // No one in pool, nothing to calibrate
+	}
+
+	// Get rotation settings
+	var rotationType string
+	var startDate string
+	err = d.db.QueryRowContext(ctx,
+		"SELECT rotation_type, start_date FROM support_assignments "+
+			"WHERE category_id = ? ORDER BY id DESC LIMIT 1",
+		categoryID).Scan(&rotationType, &startDate)
+	if err != nil {
+		return nil
+	}
+
+	period := 1
+	if rotationType == "weekly" {
+		period = 7
+	}
+
+	start, _ := time.Parse("2006-01-02", startDate)
+	daysElapsed := int(now.Sub(start) / (24 * time.Hour))
+	slot := (daysElapsed / period) % len(oldPool)
+
+	// Walk forward to find current on-duty person (skipping absent)
+	var currentPerson *SupportPerson
+	for i := 0; i < len(oldPool); i++ {
+		candidate := &oldPool[(slot+i)%len(oldPool)]
+		if candidate.Status != "absent" {
+			currentPerson = candidate
+			break
+		}
+	}
+
+	if currentPerson == nil {
+		return nil // All absent, nothing to preserve
+	}
+
+	// Find this person's index in the (now-updated) pool
+	newPool, err := d.ListSupportPersonsForCategory(ctx, categoryID)
+	if err != nil || len(newPool) == 0 {
+		return nil
+	}
+
+	newIndex := -1
+	for i := range newPool {
+		if newPool[i].ID == currentPerson.ID {
+			newIndex = i
+			break
+		}
+	}
+
+	if newIndex == -1 {
+		// Person was removed entirely; preserve the person at the "next" slot
+		// Find the next non-absent person from old slot position
+		for i := 0; i < len(newPool); i++ {
+			candidate := &newPool[(slot+i)%len(newPool)]
+			if candidate.Status != "absent" {
+				newIndex = i
+				break
+			}
+		}
+		if newIndex == -1 {
+			newIndex = slot % len(newPool) // Fallback to slot modulo
+		}
+	}
+
+	// Recalibrate: set start_date so that today's person is at slot 0
+	// start_date = today - (newIndex * period)
+	newStartDate := now.AddDate(0, 0, -(newIndex * period))
+	newStartDateStr := newStartDate.Format("2006-01-02")
+
+	// Update all assignments for this category with the new start_date
+	_, err = d.db.ExecContext(ctx,
+		"UPDATE support_assignments SET start_date = ? WHERE category_id = ?",
+		newStartDateStr, categoryID)
+	return err
+}
+
+// === Takeover Management ===
+
+func (d *DB) SetTakeover(ctx context.Context, categoryID, personID int64, setBy, fromDate, untilDate string) error {
+	// Delete any existing takeover for this category first
+	d.db.ExecContext(ctx, "DELETE FROM category_takeover WHERE category_id = ?", categoryID)
+
+	// Insert new takeover
+	_, err := d.db.ExecContext(ctx,
+		"INSERT INTO category_takeover (category_id, support_person_id, set_by, from_date, until_date) VALUES (?, ?, ?, ?, ?)",
+		categoryID, personID, setBy, fromDate, untilDate)
+	return err
+}
+
+func (d *DB) GetActiveTakeover(ctx context.Context, categoryID int64, date time.Time) (*SupportPerson, error) {
+	dateStr := date.Format("2006-01-02")
+	var personID int64
+	err := d.db.QueryRowContext(ctx,
+		"SELECT support_person_id FROM category_takeover "+
+			"WHERE category_id = ? AND from_date <= ? AND until_date >= ? LIMIT 1",
+		categoryID, dateStr, dateStr).Scan(&personID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil // No active takeover
+		}
+		return nil, err
+	}
+
+	// Fetch the person
+	persons, err := d.ListAllSupportPersons(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range persons {
+		if persons[i].ID == personID {
+			return &persons[i], nil
+		}
+	}
+	return nil, nil
+}
+
+func (d *DB) ClearTakeover(ctx context.Context, categoryID int64) error {
+	_, err := d.db.ExecContext(ctx, "DELETE FROM category_takeover WHERE category_id = ?", categoryID)
 	return err
 }
 
