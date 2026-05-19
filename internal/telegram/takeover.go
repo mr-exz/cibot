@@ -82,8 +82,6 @@ func (h *Handler) handleTakeoverCallback(ctx context.Context, b *tgbot.Bot, upda
 
 	switch {
 	case strings.HasPrefix(data, "person:"):
-
-	case strings.HasPrefix(data, "person:"):
 		// Person selected
 		parts := strings.SplitN(strings.TrimPrefix(data, "person:"), ":", 2)
 		if len(parts) != 2 {

@@ -2,7 +2,8 @@
 
 ## [0.0.83]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- Takeover command: removed duplicate case statement in callback handler that prevented person selection from advancing to duration picker
 
 
 ## [0.0.82]
