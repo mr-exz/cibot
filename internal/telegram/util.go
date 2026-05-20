@@ -101,16 +101,53 @@ func buildKeyboard(items []ButtonItem, prefix string) *models.InlineKeyboardMark
 	}
 }
 
-// buildCategoryKeyboard creates a keyboard from category list
+// buildCategoryKeyboard creates a keyboard from category list with smart layout:
+// short names (≤20 chars) fit 2 per row, long names get their own row
 func buildCategoryKeyboard(categories []storage.Category) *models.InlineKeyboardMarkup {
-	items := make([]ButtonItem, len(categories))
-	for i, cat := range categories {
-		items[i] = ButtonItem{
-			Label: cat.Emoji + " " + cat.Name,
-			ID:    cat.ID,
+	const maxLenPerRow = 20
+	rows := make([][]models.InlineKeyboardButton, 0)
+	var pendingBtn *models.InlineKeyboardButton
+
+	for _, cat := range categories {
+		label := cat.Emoji + " " + cat.Name
+		btn := &models.InlineKeyboardButton{
+			Text:         label,
+			CallbackData: fmt.Sprintf("cat:%d", cat.ID),
+		}
+
+		// If label is long, put it alone on a row
+		if len(label) > maxLenPerRow {
+			// Flush pending button if exists
+			if pendingBtn != nil {
+				rows = append(rows, []models.InlineKeyboardButton{*pendingBtn})
+				pendingBtn = nil
+			}
+			// Put long button alone
+			rows = append(rows, []models.InlineKeyboardButton{*btn})
+		} else {
+			// Short label: try to pair with pending
+			if pendingBtn == nil {
+				pendingBtn = btn
+			} else {
+				rows = append(rows, []models.InlineKeyboardButton{*pendingBtn, *btn})
+				pendingBtn = nil
+			}
 		}
 	}
-	return buildKeyboard(items, "cat:")
+
+	// Flush any remaining pending button
+	if pendingBtn != nil {
+		rows = append(rows, []models.InlineKeyboardButton{*pendingBtn})
+	}
+
+	// Add cancel button
+	rows = append(rows, []models.InlineKeyboardButton{
+		{Text: "❌ Cancel", CallbackData: "cancel"},
+	})
+
+	return &models.InlineKeyboardMarkup{
+		InlineKeyboard: rows,
+	}
 }
 
 // buildPriorityKeyboard creates the hardcoded priority selection keyboard.

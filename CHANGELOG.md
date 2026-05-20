@@ -2,7 +2,8 @@
 
 ## [0.0.85]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- Category picker (in `/ticket` and similar flows) now uses smart layout: short category names (≤20 chars) are displayed 2 per row, while long names get their own row with full width — prevents text truncation and keeps the UI compact
 
 
 ## [0.0.84]
