@@ -298,6 +298,13 @@ func (d *DB) UpdateCategoryScope(ctx context.Context, categoryID int64, chatID *
 	return err
 }
 
+func (d *DB) UpdateCategory(ctx context.Context, categoryID int64, name, emoji, teamKey string) error {
+	_, err := d.db.ExecContext(ctx,
+		"UPDATE categories SET name = ?, emoji = ?, linear_team_key = ? WHERE id = ?",
+		name, emoji, teamKey, categoryID)
+	return err
+}
+
 func (d *DB) DeleteCategory(ctx context.Context, categoryID int64) error {
 	_, err := d.db.ExecContext(ctx, "DELETE FROM categories WHERE id = ?", categoryID)
 	return err

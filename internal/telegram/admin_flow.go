@@ -32,6 +32,8 @@ func (h *Handler) handleAdminPendingInput(ctx context.Context, b *tgbot.Bot, msg
 		h.handleAdminSetLabelPending(ctx, b, msg, admin)
 	case AdminCmdCloneCategory:
 		h.handleAdminCloneCategoryPending(ctx, b, msg, admin)
+	case AdminCmdEditCategory:
+		h.handleAdminEditCategoryPending(ctx, b, msg, admin)
 	case AdminCmdOffboard:
 		h.handleOffboardPending(ctx, b, msg, admin)
 	case AdminCmdDNS:
@@ -151,6 +153,49 @@ func (h *Handler) addCategoryNow(ctx context.Context, b *tgbot.Bot, userID int64
 	})
 
 	log.Printf("✓ Admin added category: %s (ID: %d)", admin.CategoryName, catID)
+}
+
+// ===== Category edit flow =====
+
+func (h *Handler) handleAdminEditCategoryPending(ctx context.Context, b *tgbot.Bot, msg *models.Message, admin *pendingAdminSession) {
+	text := strings.TrimSpace(msg.Text)
+	if text == "" {
+		return
+	}
+
+	switch admin.Step {
+	case StepAdminCatName:
+		admin.CategoryName = text
+	case StepAdminCatEmoji:
+		admin.TypeName = text
+	case StepAdminCatTeamKey:
+		admin.TeamKey = text
+	default:
+		return
+	}
+
+	if err := h.storage.UpdateCategory(ctx, admin.CategoryID, admin.CategoryName, admin.TypeName, admin.TeamKey); err != nil {
+		b.SendMessage(ctx, &tgbot.SendMessageParams{
+			ChatID: msg.Chat.ID,
+			Text:   "❌ Failed to update category.",
+		})
+		return
+	}
+
+	key := stateKey{UserID: msg.From.ID}
+	h.mu.Lock()
+	delete(h.states, key)
+	h.mu.Unlock()
+
+	cat, err := h.storage.GetCategory(ctx, admin.CategoryID)
+	if err != nil || cat == nil {
+		b.SendMessage(ctx, &tgbot.SendMessageParams{
+			ChatID: msg.Chat.ID,
+			Text:   "✅ Updated. Category no longer found.",
+		})
+		return
+	}
+	h.sendCategoryDetail(ctx, b, admin.ChatID, admin.MessageID, cat)
 }
 
 // ===== /addtype flow =====

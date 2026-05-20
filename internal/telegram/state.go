@@ -29,6 +29,7 @@ const (
 	AdminCmdDNS                 AdminCmd = "dns"
 	AdminCmdAddPersonToCategory AdminCmd = "addpersontocategory"
 	AdminCmdTakeover            AdminCmd = "takeover"
+	AdminCmdEditCategory        AdminCmd = "editcategory"
 )
 
 // Step constants for the multi-step issue creation flow

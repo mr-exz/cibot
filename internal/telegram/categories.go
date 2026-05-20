@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -59,6 +60,11 @@ func (h *Handler) sendCategoryDetail(ctx context.Context, b *tgbot.Bot, chatID i
 	text := fmt.Sprintf("📂 %s %s\n🔷 Team: %s\n🌍 Scope: %s", cat.Emoji, cat.Name, cat.LinearTeamKey, scope)
 
 	rows := [][]models.InlineKeyboardButton{
+		{
+			{Text: "Edit name", CallbackData: fmt.Sprintf("catmgr:editname:%d", cat.ID)},
+			{Text: "Edit emoji", CallbackData: fmt.Sprintf("catmgr:editemoji:%d", cat.ID)},
+			{Text: "Edit key", CallbackData: fmt.Sprintf("catmgr:editkey:%d", cat.ID)},
+		},
 		{{Text: "🌐 Make Global", CallbackData: fmt.Sprintf("catmgr:global:%d", cat.ID)}},
 		{{Text: "🏘 Group-level", CallbackData: fmt.Sprintf("catmgr:group:%d", cat.ID)}},
 		{{Text: "📌 Topic-level", CallbackData: fmt.Sprintf("catmgr:topic:%d", cat.ID)}},
@@ -265,6 +271,48 @@ func (h *Handler) handleCategoryManagerCallback(ctx context.Context, b *tgbot.Bo
 			return
 		}
 		h.sendCategoryList(ctx, b, msg.Chat.ID, msg.ID)
+		return
+	}
+
+	// catmgr:editname:{catID}, catmgr:editemoji:{catID}, catmgr:editkey:{catID}
+	if strings.HasPrefix(action, "editname:") || strings.HasPrefix(action, "editemoji:") || strings.HasPrefix(action, "editkey:") {
+		var prefix, step, prompt string
+		if strings.HasPrefix(action, "editname:") {
+			prefix, step, prompt = "editname:", StepAdminCatName, "Type the new category name:"
+		} else if strings.HasPrefix(action, "editemoji:") {
+			prefix, step, prompt = "editemoji:", StepAdminCatEmoji, "Type the new emoji:"
+		} else {
+			prefix, step, prompt = "editkey:", StepAdminCatTeamKey, "Type the new Linear team key:"
+		}
+
+		catID, err := strconv.ParseInt(strings.TrimPrefix(action, prefix), 10, 64)
+		if err != nil {
+			return
+		}
+		cat, err := h.storage.GetCategory(ctx, catID)
+		if err != nil || cat == nil {
+			return
+		}
+
+		key := stateKey{UserID: query.From.ID}
+		h.mu.Lock()
+		h.states[key] = &pendingAdminSession{
+			Cmd:          AdminCmdEditCategory,
+			Step:         step,
+			MessageID:    msg.ID,
+			ChatID:       msg.Chat.ID,
+			CategoryID:   catID,
+			CategoryName: cat.Name,
+			TypeName:     cat.Emoji,
+			TeamKey:      cat.LinearTeamKey,
+			CreatedAt:    time.Now(),
+		}
+		h.mu.Unlock()
+		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+			ChatID:    msg.Chat.ID,
+			MessageID: msg.ID,
+			Text:      prompt,
+		})
 		return
 	}
 

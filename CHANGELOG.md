@@ -2,7 +2,8 @@
 
 ## [0.0.84]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/categories` detail view now includes edit buttons: users can click "Edit name", "Edit emoji", or "Edit key" to modify category properties after creation — each edit temporarily replaces the detail message with a prompt, and the detail view is restored after the new value is saved
 
 
 ## [0.0.83]
