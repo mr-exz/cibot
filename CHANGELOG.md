@@ -2,7 +2,8 @@
 
 ## [0.0.86]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- Tech thread `/close` command now preserves message-to-file sequence: when uploading to Linear, media files are listed inline immediately after their associated messages (marked as `[FILE] filename`) rather than separated into a "Files" section at the end — makes it clear which files go with which discussion points
 
 
 ## [0.0.85]

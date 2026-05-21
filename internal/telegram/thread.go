@@ -370,6 +370,20 @@ func appendToThreadFile(folderPath string, msg *models.Message) {
 	}
 }
 
+// appendFileEntryToThread appends a file reference to messages.txt indicating that a media file is attached to the most recent message.
+func appendFileEntryToThread(folderPath, filename string) {
+	line := fmt.Sprintf("  [FILE] %s\n", filename)
+	f, err := os.OpenFile(filepath.Join(folderPath, "messages.txt"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("⚠️  thread file open: %v", err)
+		return
+	}
+	defer f.Close()
+	if _, err := f.WriteString(line); err != nil {
+		log.Printf("⚠️  thread file write: %v", err)
+	}
+}
+
 // threadMedia holds metadata about a media attachment extracted from a Telegram message.
 type threadMedia struct {
 	fileID      string
@@ -468,7 +482,9 @@ func (h *Handler) downloadMediaToFolder(ctx context.Context, b *tgbot.Bot, folde
 
 	if err := os.WriteFile(filepath.Join(folder, meta.filename), data, 0644); err != nil {
 		log.Printf("⚠️  thread media: save failed: %v", err)
+		return
 	}
+	appendFileEntryToThread(folder, meta.filename)
 }
 
 // contentTypeForFile returns a MIME type for a filename based on its extension.
@@ -536,22 +552,36 @@ func (h *Handler) uploadThreadData(b *tgbot.Bot, tt *storage.TechThread, chatID 
 		uploads = append(uploads, uploadedFile{entry.Name(), assetURL, strings.HasPrefix(ct, "image/")})
 	}
 
-	// Build comment: message log + inline images + links for non-images.
+	// Build a map of filename → asset URL for quick lookup
+	assetMap := make(map[string]*uploadedFile)
+	for i := range uploads {
+		assetMap[uploads[i].name] = &uploads[i]
+	}
+
+	// Build comment: parse messages.txt and interleave files with their messages.
 	msgData, _ := os.ReadFile(filepath.Join(tt.FilePath, "messages.txt"))
 	var sb strings.Builder
 	sb.WriteString("## Telegram Thread\n\n")
 	sb.WriteString(fmt.Sprintf("Closed by @%s on %s\n", closedBy, time.Now().UTC().Format("2006-01-02 15:04 UTC")))
 	if len(msgData) > 0 {
 		sb.WriteString("\n---\n\n")
-		sb.WriteString(string(msgData))
-	}
-	if len(uploads) > 0 {
-		sb.WriteString("\n---\n\n")
-		for _, u := range uploads {
-			if u.isImage {
-				sb.WriteString(fmt.Sprintf("![%s](%s)\n\n", u.name, u.assetURL))
-			} else {
-				sb.WriteString(fmt.Sprintf("[%s](%s)\n\n", u.name, u.assetURL))
+		lines := strings.Split(string(msgData), "\n")
+		for _, line := range lines {
+			if line == "" {
+				continue
+			}
+			sb.WriteString(line)
+			sb.WriteString("\n")
+			// If this is a [FILE] line, add the asset URL inline
+			if strings.HasPrefix(strings.TrimSpace(line), "[FILE]") {
+				filename := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "[FILE]"))
+				if asset, ok := assetMap[filename]; ok {
+					if asset.isImage {
+						sb.WriteString(fmt.Sprintf("![%s](%s)\n\n", asset.name, asset.assetURL))
+					} else {
+						sb.WriteString(fmt.Sprintf("[%s](%s)\n\n", asset.name, asset.assetURL))
+					}
+				}
 			}
 		}
 	}
