@@ -309,7 +309,16 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 		if !onDutyResult.Online {
 			status = "🔴"
 		}
-		assigneeStr = fmt.Sprintf("%s %s\n  🔵 Telegram: @%s\n  🔷 Linear: @%s", person.Name, status, person.TelegramUsername, person.LinearUsername)
+		hoursStr := ""
+		if person.WorkHours != "" && person.Timezone != "" {
+			groupTZ := "UTC"
+			if tz, err := h.storage.GetGroupTimezone(ctx, pending.ChatID); err == nil && tz != "" {
+				groupTZ = tz
+			}
+			displayHours := convertWorkHours(person.WorkHours, person.Timezone, groupTZ)
+			hoursStr = fmt.Sprintf("\n  ⏰ Hours: %s %s", displayHours, groupTZ)
+		}
+		assigneeStr = fmt.Sprintf("%s %s\n  🔵 Telegram: @%s\n  🔷 Linear: @%s%s", person.Name, status, person.TelegramUsername, person.LinearUsername, hoursStr)
 	}
 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{

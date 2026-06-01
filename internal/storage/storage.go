@@ -652,8 +652,36 @@ func (d *DB) GetOnDutyPersonResult(ctx context.Context, categoryID int64, now ti
 		period = 7
 	}
 
-	// Calculate which person is on duty
-	daysElapsed := int(now.Sub(start) / (24 * time.Hour))
+	// Calculate which person is on duty, counting only working days
+	// Get the union of all working days from the pool
+	workingDaysSet := make(map[int]bool)
+	for i := 1; i <= 7; i++ {
+		workingDaysSet[i] = true // Start with all days
+	}
+
+	// Find the intersection of working days (days when at least one person works)
+	firstPerson := true
+	for _, p := range pool {
+		if p.WorkDays != "" {
+			personDays, err := ParseWorkDays(p.WorkDays)
+			if err == nil {
+				if firstPerson {
+					workingDaysSet = personDays
+					firstPerson = false
+				} else {
+					// Keep intersection: only days when all configured people work
+					for day := 1; day <= 7; day++ {
+						if !personDays[day] {
+							workingDaysSet[day] = false
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Count working days from start to now
+	daysElapsed := countWorkingDays(start, now, workingDaysSet)
 	slot := (daysElapsed / period) % len(pool)
 
 	// Walk forward from slot: skip absent persons, return first online non-absent person.
@@ -1197,4 +1225,26 @@ func (d *DB) SetReminderEnabled(ctx context.Context, enabled bool) error {
 		val = "1"
 	}
 	return d.SetSetting(ctx, "reminder_enabled", val)
+}
+
+// countWorkingDays counts the number of working days from start to end (exclusive of end).
+// workingDays is a map where 1=Monday, 7=Sunday (ISO 8601 convention).
+func countWorkingDays(start, end time.Time, workingDays map[int]bool) int {
+	count := 0
+	current := start
+
+	for current.Before(end) {
+		// Go's Weekday: Sunday=0, Monday=1, ..., Saturday=6
+		// Convert to ISO 8601: Monday=1, ..., Sunday=7
+		isoDay := int(current.Weekday())
+		if isoDay == 0 {
+			isoDay = 7
+		}
+
+		if workingDays[isoDay] {
+			count++
+		}
+		current = current.AddDate(0, 0, 1)
+	}
+	return count
 }

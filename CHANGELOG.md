@@ -2,7 +2,11 @@
 
 ## [0.0.88]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- When a ticket or thread is created and a support person is assigned, their working hours and timezone are now displayed (e.g., "⏰ Hours: 09:00-18:00 +05:00" for tickets, "(hours: 09:00-18:00 +05:00)" for threads), matching the format used in daily reminders — hours are converted from the person's timezone to the group's configured timezone
+
+### Fixed
+- Rotation now respects working days (work_days configuration) when calculating duty slots — only working days count toward the rotation period, so weekend days and other non-working days are skipped, preventing users from getting shifts more frequently than intended (e.g., with 4 people working Mon-Fri, the rotation now correctly cycles every 5 calendar days instead of every 4)
 
 
 ## [0.0.87]

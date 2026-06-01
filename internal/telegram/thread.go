@@ -176,6 +176,14 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 			status = "🔴"
 		}
 		onCallLine = fmt.Sprintf("On call: %s %s", p.Name, status)
+		if p.WorkHours != "" && p.Timezone != "" {
+			groupTZ := "UTC"
+			if tz, err := h.storage.GetGroupTimezone(ctx, h.cfg.TechGroupID); err == nil && tz != "" {
+				groupTZ = tz
+			}
+			displayHours := convertWorkHours(p.WorkHours, p.Timezone, groupTZ)
+			onCallLine += fmt.Sprintf(" (hours: %s %s)", displayHours, groupTZ)
+		}
 		btn := models.InlineKeyboardButton{Text: "Ping " + p.Name, CallbackData: "ping:" + p.TelegramUsername}
 		pingButton = &btn
 	}
