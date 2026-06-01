@@ -27,7 +27,7 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 		if msg.Chat.Type == "private" {
 			h.sendMessage(ctx, b, msg, "⚠️ /ticket must be used in a group chat, not here in DM.")
 		} else {
-			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID))
+			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID, msg.MessageThreadID))
 		}
 		return
 	}
@@ -171,6 +171,7 @@ func (h *Handler) handleCategoryCallback(ctx context.Context, b *tgbot.Bot, upda
 	pending.CategoryID = cat.ID
 	pending.CategoryName = cat.Name
 	pending.TeamKey = cat.LinearTeamKey
+	pending.TypeName = cat.Emoji
 
 	// Thread flow: category selection is the only step — create issue + topic immediately
 	if pending.Flow == FlowThread {

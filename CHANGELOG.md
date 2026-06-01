@@ -2,7 +2,12 @@
 
 ## [0.0.87]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/thread` confirmation message now displays the selected category with emoji and name (e.g., "✅ Thread opened! Category: 🎫 Support")
+- Tech group topic message now shows the category label below the Linear issue link for quick reference
+
+### Fixed
+- Error message when `/ticket` is used in an unconfigured context now correctly distinguishes between regular groups (no topics) and topic groups: regular groups show "Support is not configured in this group yet" while topic groups show "This topic is not configured for support tickets yet" — prevents confusing terminology when used in non-topic groups
 
 
 ## [0.0.86]

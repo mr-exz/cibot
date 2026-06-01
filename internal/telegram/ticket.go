@@ -65,7 +65,7 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		if msg.Chat.Type == "private" {
 			h.sendMessage(ctx, b, msg, "⚠️ /ticket must be used in a group chat, not here in DM.")
 		} else {
-			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID))
+			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID, msg.MessageThreadID))
 		}
 		return
 	}
@@ -140,14 +140,33 @@ func (h *Handler) handleCancelCallback(ctx context.Context, b *tgbot.Bot, update
 	log.Printf("✓ Flow cancelled by %s", query.From.Username)
 }
 
-// buildUnconfiguredTopicMsg returns a message for when /ticket is used in a group topic with no categories.
-// It lists other topics in the same group that do have categories configured.
-func (h *Handler) buildUnconfiguredTopicMsg(ctx context.Context, chatID int64) string {
+// buildUnconfiguredTopicMsg returns a message for when /ticket is used in a group with no categories.
+// If the group has topics, it lists topics with categories. Otherwise, it says support is not configured.
+func (h *Handler) buildUnconfiguredTopicMsg(ctx context.Context, chatID int64, messageThreadID int) string {
+	// messageThreadID > 0 means this is a topic group; == 0 means it's a regular group
+	hasTopics := messageThreadID > 0
+
 	topics, err := h.storage.ListConfiguredTopicsForChat(ctx, chatID)
-	if err != nil || len(topics) == 0 {
-		return "⚠️ This topic is not configured for support tickets yet. Contact an admin."
+	if err != nil {
+		return "⚠️ Support is not configured for this group. Contact an admin."
 	}
-	msg := "⚠️ This topic is not configured for support tickets yet.\n\nYou can use /ticket in:"
+
+	if len(topics) == 0 {
+		if hasTopics {
+			return "⚠️ This topic is not configured for support tickets yet. Contact an admin."
+		}
+		return "⚠️ Support is not configured for this group. Contact an admin."
+	}
+
+	if hasTopics {
+		msg := "⚠️ This topic is not configured for support tickets yet.\n\nYou can use /ticket in:"
+		for _, t := range topics {
+			msg += "\n• " + t
+		}
+		return msg
+	}
+
+	msg := "⚠️ Support is not configured in this group yet.\n\nYou can use /ticket in:"
 	for _, t := range topics {
 		msg += "\n• " + t
 	}

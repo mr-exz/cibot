@@ -183,7 +183,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 	topicMsgParams := &tgbot.SendMessageParams{
 		ChatID:          h.cfg.TechGroupID,
 		MessageThreadID: topic.MessageThreadID,
-		Text:            fmt.Sprintf("Linear: %s\n%s\n\nUse /close when done to dump this thread to the issue.", issue.URL, onCallLine),
+		Text:            fmt.Sprintf("Linear: %s\nCategory: %s %s\n%s\n\nUse /close when done to dump this thread to the issue.", issue.URL, pending.TypeName, pending.CategoryName, onCallLine),
 	}
 	if pingButton != nil {
 		topicMsgParams.ReplyMarkup = &models.InlineKeyboardMarkup{
@@ -219,7 +219,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 	delete(h.states, stateKey{UserID: pending.UserID})
 	h.mu.Unlock()
 
-	confirmText := "✅ Thread opened! Here's what to do next:\n\n" +
+	confirmText := fmt.Sprintf("✅ Thread opened! Category: %s %s\n\nHere's what to do next:\n\n", pending.TypeName, pending.CategoryName) +
 		"1️⃣ Join the tech group\n" +
 		"2️⃣ Go to the topic to chat about the case\n" +
 		"3️⃣ Use /close when done to update the Linear task\n"
