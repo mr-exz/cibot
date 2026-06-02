@@ -2,7 +2,8 @@
 
 ## [0.0.89]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- When a thread is created via `/thread`, the original reporter is now notified with a mention in the original chat: "@reporter — A tech thread was created for your message! 🔗 Topic: INFRA-1234" — this triggers a Telegram notification and points them to the new topic so they know to continue the conversation there
 
 
 ## [0.0.88]

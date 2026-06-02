@@ -167,6 +167,16 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 		MessageID:       pending.SourceMsgID,
 	})
 
+	// Notify reporter in original chat about the new thread
+	if pending.ReporterUsername != "" {
+		mentionMsg := fmt.Sprintf("@%s — A tech thread was created for your message!\n🔗 Topic: %s", pending.ReporterUsername, issue.Identifier)
+		b.SendMessage(ctx, &tgbot.SendMessageParams{
+			ChatID:          pending.ChatID,
+			MessageThreadID: pending.ThreadID,
+			Text:            mentionMsg,
+		})
+	}
+
 	onCallLine := "On call: (unassigned)"
 	var pingButton *models.InlineKeyboardButton
 	if onDutyResult != nil && onDutyResult.Person != nil {
