@@ -2,7 +2,8 @@
 
 ## [0.0.90]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- Threads created via `/thread` now assign the selected category as a Linear label, matching how `/ticket` labels its issues — previously thread issues were created without any labels
 
 
 ## [0.0.89]

@@ -137,7 +137,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 		description += "\n\n⚠️ **Note:** Assigned person is currently outside working hours."
 	}
 
-	issue, err := h.linear.CreateIssue(ctx, title, description, pending.TeamKey, assignee, nil, 0)
+	issue, err := h.linear.CreateIssue(ctx, title, description, pending.TeamKey, assignee, []string{pending.CategoryName}, 0)
 	if err != nil {
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    pending.ChatID,
