@@ -2,7 +2,8 @@
 
 ## [0.0.92]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- `/close` command now shows a "🔗 Open Linear issue" button in the initial response, providing instant access to the Linear issue without waiting for background upload to complete
 
 
 ## [0.0.91]

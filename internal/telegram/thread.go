@@ -321,6 +321,11 @@ func (h *Handler) handleCloseThread(ctx context.Context, b *tgbot.Bot, msg *mode
 		ChatID:          msg.Chat.ID,
 		MessageThreadID: msg.MessageThreadID,
 		Text:            "✅ Thread closed. Uploading messages and files to Linear in the background...",
+		ReplyMarkup: &models.InlineKeyboardMarkup{
+			InlineKeyboard: [][]models.InlineKeyboardButton{{
+				{Text: "🔗 Open Linear issue", URL: tt.LinearIssueURL},
+			}},
+		},
 	})
 
 	go h.uploadThreadData(b, tt, msg.Chat.ID, msg.MessageThreadID, msg.From.Username, wg)
