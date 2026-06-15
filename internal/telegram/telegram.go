@@ -149,6 +149,7 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 
 	go h.sessionReaper(ctx)
 	go h.startReminderScheduler(ctx, b)
+	go h.startRotationScheduler(ctx)
 
 	return b, nil
 }

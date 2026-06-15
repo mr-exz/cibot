@@ -437,10 +437,11 @@ func (h *Handler) finalizeAddPerson(ctx context.Context, b *tgbot.Bot, admin *pe
 		return
 	}
 
-	// Recalibrate rotation to preserve current on-duty person
+	// Seed the rotation schedule if this is the first person (no-op otherwise).
+	// The new person enters the rotation when the next turn is generated.
 	now := time.Now()
-	if err := h.storage.RecalibrateRotation(ctx, admin.CategoryID, now); err != nil {
-		log.Printf("⚠️  RecalibrateRotation failed: %v", err)
+	if err := h.storage.EnsureRotationGenerated(ctx, admin.CategoryID, now); err != nil {
+		log.Printf("⚠️  EnsureRotationGenerated failed: %v", err)
 	}
 
 	h.mu.Lock()
@@ -783,10 +784,11 @@ func (h *Handler) handleAdminCategoryCallback(ctx context.Context, b *tgbot.Bot,
 				Text:      fmt.Sprintf("❌ Failed to add to category: %v", err),
 			})
 		} else {
-			// Recalibrate rotation to preserve current on-duty person
+			// Seed the rotation schedule if needed (no-op for an existing one).
+			// The new person enters the rotation when the next turn is generated.
 			now := time.Now()
-			if err := h.storage.RecalibrateRotation(ctx, cat.ID, now); err != nil {
-				log.Printf("⚠️  RecalibrateRotation failed: %v", err)
+			if err := h.storage.EnsureRotationGenerated(ctx, cat.ID, now); err != nil {
+				log.Printf("⚠️  EnsureRotationGenerated failed: %v", err)
 			}
 			h.mu.Lock()
 			delete(h.states, stateKey{UserID: admin.UserID})

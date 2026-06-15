@@ -2,7 +2,12 @@
 
 ## [0.0.91]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- Rotation is now stored as a materialized schedule (one row per rotation "turn") instead of being recomputed on every read from a single anchor date. Past turns are immutable history and are never recalculated, which fixes the frequent "rotation got reset" complaints. The current week and next week are always pre-generated (a daily background sweep keeps them filled), so each Monday the pre-computed next-week assignment becomes active.
+
+### Fixed
+- Adding or removing a support person no longer reshuffles the whole rotation. Adding a person leaves already-decided weeks untouched — they join the cycle when the rotation reaches them. Removing the person on duty hands their current and future turns to the next person in line (persisted), while the days they already covered remain in the historical record.
+- Removed the buggy rotation recalibration that mixed calendar days and working days when the roster changed, which was the main cause of the rotation appearing to jump/reset.
 
 
 ## [0.0.90]

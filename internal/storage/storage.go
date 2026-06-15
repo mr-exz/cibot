@@ -586,9 +586,9 @@ func (d *DB) RemovePersonFromCategory(ctx context.Context, personID, categoryID 
 		return err
 	}
 
-	// Recalibrate rotation to preserve current on-duty person
-	now := time.Now()
-	return d.RecalibrateRotation(ctx, categoryID, now)
+	// Hand the removed person's current and future duty to the next person in
+	// line; past turns stay as history.
+	return d.reassignAfterRemoval(ctx, categoryID, personID, time.Now())
 }
 
 func (d *DB) DeleteSupportPerson(ctx context.Context, personID int64) error {
@@ -629,60 +629,23 @@ func (d *DB) GetOnDutyPersonResult(ctx context.Context, categoryID int64, now ti
 		return nil, fmt.Errorf("no support persons assigned to category %d", categoryID)
 	}
 
-	// Get the rotation assignment for this category
-	var rotationType string
-	var startDate string
-	err = d.db.QueryRowContext(ctx,
-		"SELECT rotation_type, start_date FROM support_assignments "+
-			"WHERE category_id = ? ORDER BY id DESC LIMIT 1",
-		categoryID).Scan(&rotationType, &startDate)
+	// Resolve the on-duty base person from the materialized rotation schedule.
+	// Past turns are frozen history; the schedule is generated on demand if a
+	// covering turn does not exist yet.
+	basePersonID, err := d.baseDutyPersonID(ctx, categoryID, now)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse start date
-	start, err := time.Parse("2006-01-02", startDate)
-	if err != nil {
-		return nil, fmt.Errorf("invalid start_date format: %w", err)
-	}
-
-	// Calculate rotation period in days
-	period := 1 // daily
-	if rotationType == "weekly" {
-		period = 7
-	}
-
-	// Calculate which person is on duty, counting only working days
-	// Get the union of all working days from the pool
-	workingDaysSet := make(map[int]bool)
-	for i := 1; i <= 7; i++ {
-		workingDaysSet[i] = true // Start with all days
-	}
-
-	// Find the intersection of working days (days when at least one person works)
-	firstPerson := true
-	for _, p := range pool {
-		if p.WorkDays != "" {
-			personDays, err := ParseWorkDays(p.WorkDays)
-			if err == nil {
-				if firstPerson {
-					workingDaysSet = personDays
-					firstPerson = false
-				} else {
-					// Keep intersection: only days when all configured people work
-					for day := 1; day <= 7; day++ {
-						if !personDays[day] {
-							workingDaysSet[day] = false
-						}
-					}
-				}
-			}
+	// Map the base person to a slot in the current pool. If the base person is
+	// no longer in the pool, fall back to the first slot.
+	slot := 0
+	for i := range pool {
+		if pool[i].ID == basePersonID {
+			slot = i
+			break
 		}
 	}
-
-	// Count working days from start to now
-	daysElapsed := countWorkingDays(start, now, workingDaysSet)
-	slot := (daysElapsed / period) % len(pool)
 
 	// Walk forward from slot: skip absent persons, return first online non-absent person.
 	for i := 0; i < len(pool); i++ {
@@ -1063,89 +1026,370 @@ func (d *DB) CreateInitialAssignment(ctx context.Context, categoryID int64, supp
 	return err
 }
 
-// RecalibrateRotation ensures the same person remains on duty after pool changes.
-// When a person is added/removed from a category, this recalculates start_date so
-// the currently on-duty person (if still in pool) stays on duty.
-func (d *DB) RecalibrateRotation(ctx context.Context, categoryID int64, now time.Time) error {
-	// Get current on-duty person and their index (before/with current pool)
-	oldPool, err := d.ListSupportPersonsForCategory(ctx, categoryID)
-	if err != nil || len(oldPool) == 0 {
-		return nil // No one in pool, nothing to calibrate
+// === Materialized rotation schedule ===
+//
+// The rotation_schedule table stores rotation "turns": the person on duty from
+// turn_start (inclusive) until the next turn's turn_start (exclusive). The base
+// on-duty person for a date is the turn with the greatest turn_start <= date.
+// Past turns are immutable history; only turns on or after "today" are rewritten.
+
+// GenerateAllRotations materializes the schedule for every category through the
+// end of next week. Safe to call repeatedly (e.g. on startup and on a timer):
+// it only inserts missing turns and never rewrites existing ones.
+func (d *DB) GenerateAllRotations(ctx context.Context, now time.Time) error {
+	categories, err := d.ListCategories(ctx)
+	if err != nil {
+		return err
+	}
+	for _, cat := range categories {
+		if err := d.ensureRotationGenerated(ctx, cat.ID, now); err != nil {
+			log.Printf("⚠️  rotation: generate failed for category %d: %v", cat.ID, err)
+		}
+	}
+	return nil
+}
+
+// EnsureRotationGenerated materializes the schedule for a single category. Call
+// it after adding a person so a brand-new category gets seeded; existing turns
+// are never modified, so it does not disturb already-decided weeks.
+func (d *DB) EnsureRotationGenerated(ctx context.Context, categoryID int64, now time.Time) error {
+	return d.ensureRotationGenerated(ctx, categoryID, now)
+}
+
+// baseDutyPersonID returns the materialized on-duty person for the given date,
+// generating the schedule on demand if a covering turn does not exist yet.
+func (d *DB) baseDutyPersonID(ctx context.Context, categoryID int64, now time.Time) (int64, error) {
+	if id, ok, err := d.lookupTurnPerson(ctx, categoryID, now); err != nil {
+		return 0, err
+	} else if ok {
+		return id, nil
+	}
+	if err := d.ensureRotationGenerated(ctx, categoryID, now); err != nil {
+		return 0, err
+	}
+	if id, ok, err := d.lookupTurnPerson(ctx, categoryID, now); err != nil {
+		return 0, err
+	} else if ok {
+		return id, nil
+	}
+	// Date precedes the first materialized turn (e.g. a historical lookup before
+	// the schedule existed): fall back to the legacy anchor-based computation.
+	return d.legacyBaseDutyPersonID(ctx, categoryID, now)
+}
+
+// GetScheduledPerson returns the raw materialized on-duty person for a date,
+// without the online/absent walk-forward applied by GetOnDutyPersonResult.
+// Useful for printing the historical rotation as it was actually scheduled.
+func (d *DB) GetScheduledPerson(ctx context.Context, categoryID int64, date time.Time) (*SupportPerson, error) {
+	id, ok, err := d.lookupTurnPerson(ctx, categoryID, date)
+	if err != nil || !ok {
+		return nil, err
+	}
+	persons, err := d.ListAllSupportPersons(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range persons {
+		if persons[i].ID == id {
+			return &persons[i], nil
+		}
+	}
+	return nil, nil
+}
+
+// ensureRotationGenerated fills in rotation turns through the end of next week,
+// keeping the current week and next week materialized at all times. It only
+// inserts missing turns, so past and already-decided turns are preserved.
+func (d *DB) ensureRotationGenerated(ctx context.Context, categoryID int64, now time.Time) error {
+	pool, err := d.ListSupportPersonsForCategory(ctx, categoryID)
+	if err != nil {
+		return err
+	}
+	if len(pool) == 0 {
+		return nil
 	}
 
-	// Get rotation settings
-	var rotationType string
-	var startDate string
+	rotationType, err := d.categoryRotationType(ctx, categoryID)
+	if err != nil {
+		return err
+	}
+	weekly := rotationType == "weekly"
+	workdays := workingDaysSetForPool(pool)
+
+	// Everything before the start of the week after next must be materialized.
+	horizonEnd := mondayOf(now).AddDate(0, 0, 14)
+
+	lastStart, lastPersonID, ok, err := d.latestTurn(ctx, categoryID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		// Seed the current turn from the legacy anchor so the on-duty person is
+		// continuous with the pre-materialization computation.
+		seedStart := mondayOf(now)
+		if !weekly {
+			seedStart = calDate(now)
+		}
+		seedPersonID, err := d.legacyBaseDutyPersonID(ctx, categoryID, now)
+		if err != nil {
+			return err
+		}
+		if err := d.insertTurn(ctx, categoryID, seedStart, seedPersonID); err != nil {
+			return err
+		}
+		lastStart, lastPersonID = seedStart, seedPersonID
+	}
+
+	ids := personIDs(pool)
+	for guard := 0; guard < 400; guard++ {
+		var nextStart time.Time
+		if weekly {
+			nextStart = mondayOf(lastStart).AddDate(0, 0, 7)
+		} else {
+			nextStart = nextWorkingDay(lastStart, workdays)
+		}
+		if !nextStart.Before(horizonEnd) {
+			break
+		}
+		nextPersonID := nextPersonAfter(ids, lastPersonID)
+		if err := d.insertTurn(ctx, categoryID, nextStart, nextPersonID); err != nil {
+			return err
+		}
+		lastStart, lastPersonID = nextStart, nextPersonID
+	}
+	return nil
+}
+
+// reassignAfterRemoval keeps history intact while handing the removed person's
+// current and future duty to the next person in line. Past turns are left
+// untouched; today and all future turns are recomputed from the remaining pool.
+func (d *DB) reassignAfterRemoval(ctx context.Context, categoryID, removedPersonID int64, now time.Time) error {
+	pool, err := d.ListSupportPersonsForCategory(ctx, categoryID)
+	if err != nil {
+		return err
+	}
+	today := dateKey(now)
+
+	if len(pool) == 0 {
+		// No one left to cover: drop today and all future turns (past stays).
+		_, err := d.db.ExecContext(ctx,
+			"DELETE FROM rotation_schedule WHERE category_id = ? AND turn_start >= ?",
+			categoryID, today)
+		return err
+	}
+
+	// If the removed person was on duty today, hand today over to the next
+	// person in line. Inserting a turn at today splits any in-progress turn so
+	// the already-elapsed portion stays as history.
+	if curID, ok, err := d.lookupTurnPerson(ctx, categoryID, now); err != nil {
+		return err
+	} else if ok && curID == removedPersonID {
+		replacement := nextPersonAfter(personIDs(pool), removedPersonID)
+		if _, err := d.db.ExecContext(ctx,
+			"INSERT INTO rotation_schedule (category_id, turn_start, support_person_id) VALUES (?, ?, ?) "+
+				"ON CONFLICT(category_id, turn_start) DO UPDATE SET support_person_id = excluded.support_person_id",
+			categoryID, today, replacement); err != nil {
+			return err
+		}
+	}
+
+	// Discard future turns and regenerate them cleanly from the new pool so the
+	// rotation continues without the removed person and without gaps.
+	if _, err := d.db.ExecContext(ctx,
+		"DELETE FROM rotation_schedule WHERE category_id = ? AND turn_start > ?",
+		categoryID, today); err != nil {
+		return err
+	}
+	return d.ensureRotationGenerated(ctx, categoryID, now)
+}
+
+// legacyBaseDutyPersonID computes the on-duty base person from the original
+// anchor (support_assignments.start_date) using working-day counting. Used to
+// seed the materialized schedule and to resolve lookups before it existed.
+func (d *DB) legacyBaseDutyPersonID(ctx context.Context, categoryID int64, now time.Time) (int64, error) {
+	pool, err := d.ListSupportPersonsForCategory(ctx, categoryID)
+	if err != nil {
+		return 0, err
+	}
+	if len(pool) == 0 {
+		return 0, fmt.Errorf("no support persons assigned to category %d", categoryID)
+	}
+	var rotationType, startDate string
 	err = d.db.QueryRowContext(ctx,
 		"SELECT rotation_type, start_date FROM support_assignments "+
 			"WHERE category_id = ? ORDER BY id DESC LIMIT 1",
 		categoryID).Scan(&rotationType, &startDate)
 	if err != nil {
-		return nil
+		return 0, err
 	}
-
+	start, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		return 0, fmt.Errorf("invalid start_date format: %w", err)
+	}
 	period := 1
 	if rotationType == "weekly" {
 		period = 7
 	}
+	daysElapsed := countWorkingDays(start, now, workingDaysSetForPool(pool))
+	slot := (daysElapsed / period) % len(pool)
+	return pool[slot].ID, nil
+}
 
-	start, _ := time.Parse("2006-01-02", startDate)
-	daysElapsed := int(now.Sub(start) / (24 * time.Hour))
-	slot := (daysElapsed / period) % len(oldPool)
+func (d *DB) categoryRotationType(ctx context.Context, categoryID int64) (string, error) {
+	var rt string
+	err := d.db.QueryRowContext(ctx,
+		"SELECT rotation_type FROM support_assignments WHERE category_id = ? ORDER BY id DESC LIMIT 1",
+		categoryID).Scan(&rt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "daily", nil
+	}
+	return rt, err
+}
 
-	// Walk forward to find current on-duty person (skipping absent)
-	var currentPerson *SupportPerson
-	for i := 0; i < len(oldPool); i++ {
-		candidate := &oldPool[(slot+i)%len(oldPool)]
-		if candidate.Status != "absent" {
-			currentPerson = candidate
-			break
+func (d *DB) lookupTurnPerson(ctx context.Context, categoryID int64, date time.Time) (int64, bool, error) {
+	var id int64
+	err := d.db.QueryRowContext(ctx,
+		"SELECT support_person_id FROM rotation_schedule "+
+			"WHERE category_id = ? AND turn_start <= ? ORDER BY turn_start DESC LIMIT 1",
+		categoryID, dateKey(date)).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return id, true, nil
+}
+
+func (d *DB) latestTurn(ctx context.Context, categoryID int64) (time.Time, int64, bool, error) {
+	var startStr string
+	var personID int64
+	err := d.db.QueryRowContext(ctx,
+		"SELECT turn_start, support_person_id FROM rotation_schedule "+
+			"WHERE category_id = ? ORDER BY turn_start DESC LIMIT 1",
+		categoryID).Scan(&startStr, &personID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, 0, false, nil
+	}
+	if err != nil {
+		return time.Time{}, 0, false, err
+	}
+	start, err := time.Parse("2006-01-02", startStr)
+	if err != nil {
+		return time.Time{}, 0, false, err
+	}
+	return start, personID, true, nil
+}
+
+func (d *DB) insertTurn(ctx context.Context, categoryID int64, start time.Time, personID int64) error {
+	_, err := d.db.ExecContext(ctx,
+		"INSERT OR IGNORE INTO rotation_schedule (category_id, turn_start, support_person_id) VALUES (?, ?, ?)",
+		categoryID, dateKey(start), personID)
+	return err
+}
+
+// nextPersonAfter returns the next person id after afterID in pool order (ids
+// are ascending). If afterID is no longer in the pool, it returns the next
+// higher id, wrapping around — i.e. who naturally follows the removed slot.
+func nextPersonAfter(ids []int64, afterID int64) int64 {
+	if len(ids) == 0 {
+		return 0
+	}
+	for i, id := range ids {
+		if id == afterID {
+			return ids[(i+1)%len(ids)]
 		}
 	}
-
-	if currentPerson == nil {
-		return nil // All absent, nothing to preserve
-	}
-
-	// Find this person's index in the (now-updated) pool
-	newPool, err := d.ListSupportPersonsForCategory(ctx, categoryID)
-	if err != nil || len(newPool) == 0 {
-		return nil
-	}
-
-	newIndex := -1
-	for i := range newPool {
-		if newPool[i].ID == currentPerson.ID {
-			newIndex = i
-			break
+	for _, id := range ids {
+		if id > afterID {
+			return id
 		}
 	}
+	return ids[0]
+}
 
-	if newIndex == -1 {
-		// Person was removed entirely; preserve the person at the "next" slot
-		// Find the next non-absent person from old slot position
-		for i := 0; i < len(newPool); i++ {
-			candidate := &newPool[(slot+i)%len(newPool)]
-			if candidate.Status != "absent" {
-				newIndex = i
-				break
+func personIDs(pool []SupportPerson) []int64 {
+	ids := make([]int64, len(pool))
+	for i := range pool {
+		ids[i] = pool[i].ID
+	}
+	return ids
+}
+
+// workingDaysSetForPool returns the set of days the category is staffed: the
+// intersection of the configured work days of everyone in the pool (1=Mon..7=Sun).
+func workingDaysSetForPool(pool []SupportPerson) map[int]bool {
+	set := make(map[int]bool)
+	for i := 1; i <= 7; i++ {
+		set[i] = true
+	}
+	first := true
+	for _, p := range pool {
+		if p.WorkDays == "" {
+			continue
+		}
+		days, err := ParseWorkDays(p.WorkDays)
+		if err != nil {
+			continue
+		}
+		if first {
+			set = days
+			first = false
+		} else {
+			for day := 1; day <= 7; day++ {
+				if !days[day] {
+					set[day] = false
+				}
 			}
 		}
-		if newIndex == -1 {
-			newIndex = slot % len(newPool) // Fallback to slot modulo
+	}
+	return set
+}
+
+// calDate returns the calendar date of t (in t's own location) as UTC midnight,
+// so all turn-boundary arithmetic happens in a single, comparable space.
+func calDate(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+
+func dateKey(t time.Time) string { return calDate(t).Format("2006-01-02") }
+
+// mondayOf returns the Monday of t's ISO week as UTC midnight.
+func mondayOf(t time.Time) time.Time {
+	d := calDate(t)
+	iso := int(d.Weekday())
+	if iso == 0 {
+		iso = 7
+	}
+	return d.AddDate(0, 0, -(iso - 1))
+}
+
+// nextWorkingDay returns the first staffed day strictly after from. If no day is
+// staffed (empty intersection), it returns the next calendar day.
+func nextWorkingDay(from time.Time, workdays map[int]bool) time.Time {
+	hasWork := false
+	for d := 1; d <= 7; d++ {
+		if workdays[d] {
+			hasWork = true
+			break
 		}
 	}
-
-	// Recalibrate: set start_date so that today's person is at slot 0
-	// start_date = today - (newIndex * period)
-	newStartDate := now.AddDate(0, 0, -(newIndex * period))
-	newStartDateStr := newStartDate.Format("2006-01-02")
-
-	// Update all assignments for this category with the new start_date
-	_, err = d.db.ExecContext(ctx,
-		"UPDATE support_assignments SET start_date = ? WHERE category_id = ?",
-		newStartDateStr, categoryID)
-	return err
+	day := calDate(from).AddDate(0, 0, 1)
+	if !hasWork {
+		return day
+	}
+	for i := 0; i < 14; i++ {
+		iso := int(day.Weekday())
+		if iso == 0 {
+			iso = 7
+		}
+		if workdays[iso] {
+			return day
+		}
+		day = day.AddDate(0, 0, 1)
+	}
+	return calDate(from).AddDate(0, 0, 1)
 }
 
 // === Takeover Management ===
