@@ -2,7 +2,12 @@
 
 ## [0.0.94]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- **Complete translations for core flows**: `/thread`, `/ticket`, `/ticket_manual`, and `/close` commands now fully support English and Russian — 105+ user-facing messages translated to YAML files (`resources/i18n/eng.yaml`, `resources/i18n/ru.yaml`)
+- Translation system with fallback: bot fails loudly on missing translation files instead of showing blank messages
+
+### Fixed
+- Dockerfile now copies `resources/` directory to final image — translation files were missing from Docker deployments, causing `/thread` and other commands to fail with "message text is empty"
 
 
 ## [0.0.93]

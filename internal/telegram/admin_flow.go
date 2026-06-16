@@ -128,7 +128,7 @@ func (h *Handler) addCategoryNow(ctx context.Context, b *tgbot.Bot, userID int64
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("❌ Failed to add category: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.FailedAddCategory, err),
 		})
 		return
 	}
@@ -149,7 +149,7 @@ func (h *Handler) addCategoryNow(ctx context.Context, b *tgbot.Bot, userID int64
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    admin.ChatID,
 		MessageID: admin.MessageID,
-		Text:      fmt.Sprintf("✅ Category added%s!\n\n%s %s → %s\n\nID: %d", scopeMsg, admin.TypeName, admin.CategoryName, admin.TeamKey, catID),
+		Text:      fmt.Sprintf(h.trans.Category.AddedSuccess, scopeMsg, admin.TypeName, admin.CategoryName, admin.TeamKey, catID),
 	})
 
 	log.Printf("✓ Admin added category: %s (ID: %d)", admin.CategoryName, catID)
@@ -177,7 +177,7 @@ func (h *Handler) handleAdminEditCategoryPending(ctx context.Context, b *tgbot.B
 	if err := h.storage.UpdateCategory(ctx, admin.CategoryID, admin.CategoryName, admin.TypeName, admin.TeamKey); err != nil {
 		b.SendMessage(ctx, &tgbot.SendMessageParams{
 			ChatID: msg.Chat.ID,
-			Text:   "❌ Failed to update category.",
+			Text:   h.trans.Category.FailedToUpdate,
 		})
 		return
 	}
@@ -191,7 +191,7 @@ func (h *Handler) handleAdminEditCategoryPending(ctx context.Context, b *tgbot.B
 	if err != nil || cat == nil {
 		b.SendMessage(ctx, &tgbot.SendMessageParams{
 			ChatID: msg.Chat.ID,
-			Text:   "✅ Updated. Category no longer found.",
+			Text:   h.trans.Common.CategoryNotFound,
 		})
 		return
 	}
@@ -245,7 +245,7 @@ func (h *Handler) handleAdminTypeSelectCallback(ctx context.Context, b *tgbot.Bo
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("❌ Failed to link type: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.FailedLinkType, err),
 		})
 		return
 	}
@@ -263,7 +263,7 @@ func (h *Handler) handleAdminTypeSelectCallback(ctx context.Context, b *tgbot.Bo
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    admin.ChatID,
 		MessageID: admin.MessageID,
-		Text:      fmt.Sprintf("✅ Linked type to category!\n\n%s → %s", admin.CategoryName, typeName),
+		Text:      fmt.Sprintf(h.trans.Category.LinkedTypeSuccess, admin.CategoryName, typeName),
 	})
 	log.Printf("✓ Admin linked existing type %d (%s) to category %d", typeID, typeName, admin.CategoryID)
 }
@@ -284,7 +284,7 @@ func (h *Handler) handleAdminAddTypePending(ctx context.Context, b *tgbot.Bot, m
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    admin.ChatID,
 				MessageID: admin.MessageID,
-				Text:      fmt.Sprintf("❌ Failed to add request type: %v", err),
+				Text:      fmt.Sprintf(h.trans.Error.FailedAddRequestType, err),
 			})
 			return
 		}
@@ -295,7 +295,7 @@ func (h *Handler) handleAdminAddTypePending(ctx context.Context, b *tgbot.Bot, m
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    admin.ChatID,
 				MessageID: admin.MessageID,
-				Text:      fmt.Sprintf("❌ Failed to link type: %v", err),
+				Text:      fmt.Sprintf(h.trans.Error.FailedLinkType, err),
 			})
 			return
 		}
@@ -309,7 +309,7 @@ func (h *Handler) handleAdminAddTypePending(ctx context.Context, b *tgbot.Bot, m
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✅ Request type added!\n\n%s → %s", admin.CategoryName, text),
+			Text:      fmt.Sprintf(h.trans.RequestType.AddedSuccess, admin.CategoryName, text),
 		})
 
 		log.Printf("✓ Admin added type %s to category %d", admin.TypeName, admin.CategoryID)

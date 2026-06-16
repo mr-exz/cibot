@@ -64,9 +64,9 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 
 	trans, err := i18n.Load(lang)
 	if err != nil {
-		log.Printf("⚠️  Failed to load translations for %s, using empty: %v", langCode, err)
-		trans = &i18n.Translations{}
+		log.Fatalf("❌ Failed to load translations for %s: %v\nMake sure resources/i18n/ directory exists", langCode, err)
 	}
+	log.Printf("✓ Loaded %s translations", langCode)
 
 	h := &Handler{
 		linear:         linearClient,

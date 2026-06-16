@@ -24,9 +24,9 @@ func (h *Handler) sendCategoryList(ctx context.Context, b *tgbot.Bot, chatID int
 		return
 	}
 
-	text := fmt.Sprintf("📂 Categories (%d):", len(cats))
+	text := fmt.Sprintf(h.trans.Admin.Categories, len(cats))
 	if len(cats) == 0 {
-		text = "No categories yet. Use /addcategory to create one."
+		text = h.trans.Category.NoCategories
 	}
 
 	rows := make([][]models.InlineKeyboardButton, 0, len(cats))
@@ -61,16 +61,16 @@ func (h *Handler) sendCategoryDetail(ctx context.Context, b *tgbot.Bot, chatID i
 
 	rows := [][]models.InlineKeyboardButton{
 		{
-			{Text: "Edit name", CallbackData: fmt.Sprintf("catmgr:editname:%d", cat.ID)},
-			{Text: "Edit emoji", CallbackData: fmt.Sprintf("catmgr:editemoji:%d", cat.ID)},
-			{Text: "Edit key", CallbackData: fmt.Sprintf("catmgr:editkey:%d", cat.ID)},
+			{Text: h.trans.Category.EditName, CallbackData: fmt.Sprintf("catmgr:editname:%d", cat.ID)},
+			{Text: h.trans.Category.EditEmoji, CallbackData: fmt.Sprintf("catmgr:editemoji:%d", cat.ID)},
+			{Text: h.trans.Category.EditKey, CallbackData: fmt.Sprintf("catmgr:editkey:%d", cat.ID)},
 		},
-		{{Text: "🌐 Make Global", CallbackData: fmt.Sprintf("catmgr:global:%d", cat.ID)}},
-		{{Text: "🏘 Group-level", CallbackData: fmt.Sprintf("catmgr:group:%d", cat.ID)}},
-		{{Text: "📌 Topic-level", CallbackData: fmt.Sprintf("catmgr:topic:%d", cat.ID)}},
-		{{Text: "📋 Clone", CallbackData: fmt.Sprintf("catmgr:clone:%d", cat.ID)}},
-		{{Text: "🗑 Delete", CallbackData: fmt.Sprintf("catmgr:delete:%d", cat.ID)}},
-		{{Text: "⬅ Back", CallbackData: "catmgr:list"}},
+		{{Text: h.trans.Category.MakeGlobal, CallbackData: fmt.Sprintf("catmgr:global:%d", cat.ID)}},
+		{{Text: h.trans.Category.GroupLevel, CallbackData: fmt.Sprintf("catmgr:group:%d", cat.ID)}},
+		{{Text: fmt.Sprintf(h.trans.Category.TopicLevel, "📌 Topic"), CallbackData: fmt.Sprintf("catmgr:topic:%d", cat.ID)}},
+		{{Text: h.trans.Category.CloneCategory, CallbackData: fmt.Sprintf("catmgr:clone:%d", cat.ID)}},
+		{{Text: h.trans.Admin.Confirm, CallbackData: fmt.Sprintf("catmgr:delete:%d", cat.ID)}},
+		{{Text: h.trans.Admin.Back, CallbackData: "catmgr:list"}},
 	}
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      chatID,
@@ -140,7 +140,7 @@ func (h *Handler) handleCategoryManagerCallback(ctx context.Context, b *tgbot.Bo
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    msg.Chat.ID,
 				MessageID: msg.ID,
-				Text:      fmt.Sprintf("❌ Failed: %v", err),
+				Text:      fmt.Sprintf(h.trans.Error.Failed, err),
 			})
 			return
 		}
@@ -243,13 +243,13 @@ func (h *Handler) handleCategoryManagerCallback(ctx context.Context, b *tgbot.Bo
 			catName = cat.Emoji + " " + cat.Name
 		}
 		rows := [][]models.InlineKeyboardButton{{
-			{Text: "✅ Confirm Delete", CallbackData: fmt.Sprintf("catmgr:delconfirm:%d", catID)},
-			{Text: "⬅ Cancel", CallbackData: fmt.Sprintf("catmgr:detail:%d", catID)},
+			{Text: h.trans.Category.ConfirmDelete, CallbackData: fmt.Sprintf("catmgr:delconfirm:%d", catID)},
+			{Text: h.trans.Admin.Cancel, CallbackData: fmt.Sprintf("catmgr:detail:%d", catID)},
 		}}
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:      msg.Chat.ID,
 			MessageID:   msg.ID,
-			Text:        fmt.Sprintf("⚠️ Delete %s?\n\nThis removes all its request types and assignments.", catName),
+			Text:        fmt.Sprintf(h.trans.Category.ConfirmDeleteCategory, catName),
 			ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows},
 		})
 		return
@@ -266,7 +266,7 @@ func (h *Handler) handleCategoryManagerCallback(ctx context.Context, b *tgbot.Bo
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    msg.Chat.ID,
 				MessageID: msg.ID,
-				Text:      fmt.Sprintf("❌ Failed to delete: %v", err),
+				Text:      fmt.Sprintf(h.trans.Error.FailedDelete, err),
 			})
 			return
 		}
@@ -278,11 +278,11 @@ func (h *Handler) handleCategoryManagerCallback(ctx context.Context, b *tgbot.Bo
 	if strings.HasPrefix(action, "editname:") || strings.HasPrefix(action, "editemoji:") || strings.HasPrefix(action, "editkey:") {
 		var prefix, step, prompt string
 		if strings.HasPrefix(action, "editname:") {
-			prefix, step, prompt = "editname:", StepAdminCatName, "Type the new category name:"
+			prefix, step, prompt = "editname:", StepAdminCatName, h.trans.Category.EnterName
 		} else if strings.HasPrefix(action, "editemoji:") {
-			prefix, step, prompt = "editemoji:", StepAdminCatEmoji, "Type the new emoji:"
+			prefix, step, prompt = "editemoji:", StepAdminCatEmoji, h.trans.Category.EnterEmoji
 		} else {
-			prefix, step, prompt = "editkey:", StepAdminCatTeamKey, "Type the new Linear team key:"
+			prefix, step, prompt = "editkey:", StepAdminCatTeamKey, h.trans.Category.EnterLinearTeamKey
 		}
 
 		catID, err := strconv.ParseInt(strings.TrimPrefix(action, prefix), 10, 64)
@@ -396,7 +396,7 @@ func (h *Handler) handleCategoryManagerCallback(ctx context.Context, b *tgbot.Bo
 
 		sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
 			ChatID: msg.Chat.ID,
-			Text:   fmt.Sprintf("✓ Cloning: %s %s\n\nEnter new Linear team key (current: %s):", src.Emoji, src.Name, src.LinearTeamKey),
+			Text:   fmt.Sprintf(h.trans.Category.CloningPrompt, src.Emoji, src.Name, src.LinearTeamKey),
 		})
 		if err != nil {
 			log.Printf("❌ clonekey SendMessage: %v", err)
@@ -443,14 +443,14 @@ func (h *Handler) showGroupPickerForCatMgr(ctx context.Context, b *tgbot.Bot, ch
 		}})
 	}
 	rows = append(rows, []models.InlineKeyboardButton{{
-		Text:         "⬅ Back",
+		Text:         h.trans.Admin.Back,
 		CallbackData: fmt.Sprintf("catmgr:detail:%d", catID),
 	}})
 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      chatID,
 		MessageID:   editMsgID,
-		Text:        "🏘 Select group:",
+		Text:        h.trans.Admin.SelectGroup,
 		ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows},
 	})
 }
@@ -462,18 +462,18 @@ func (h *Handler) showCloneTopicPicker(ctx context.Context, b *tgbot.Bot, chatID
 
 	rows := [][]models.InlineKeyboardButton{
 		{{
-			Text:         "🏘 Group-level (no topic)",
+			Text:         h.trans.Category.GroupLevel,
 			CallbackData: fmt.Sprintf("catmgr:clonetopic:%d:%d:0", catID, targetChatID),
 		}},
 	}
 	for _, t := range sortTopics(topics) {
 		rows = append(rows, []models.InlineKeyboardButton{{
-			Text:         "📌 " + t.Name,
+			Text:         fmt.Sprintf(h.trans.Category.TopicLevel, t.Name),
 			CallbackData: fmt.Sprintf("catmgr:clonetopic:%d:%d:%d", catID, targetChatID, t.ThreadID),
 		}})
 	}
 	rows = append(rows, []models.InlineKeyboardButton{{
-		Text:         "⬅ Back",
+		Text:         h.trans.Admin.Back,
 		CallbackData: fmt.Sprintf("catmgr:clone:%d", catID),
 	}})
 
@@ -494,22 +494,22 @@ func (h *Handler) showCloneKeyStep(ctx context.Context, b *tgbot.Bot, chatID int
 
 	rows := [][]models.InlineKeyboardButton{
 		{{
-			Text:         "✅ Keep: " + src.LinearTeamKey,
+			Text:         fmt.Sprintf(h.trans.Common.KeepOption, src.LinearTeamKey),
 			CallbackData: fmt.Sprintf("catmgr:clonesame:%d:%d:%d", catID, targetChatID, threadID),
 		}},
 		{{
-			Text:         "✏️ Change key",
+			Text:         h.trans.Category.EditKey,
 			CallbackData: fmt.Sprintf("catmgr:clonekey:%d:%d:%d", catID, targetChatID, threadID),
 		}},
 		{{
-			Text:         "⬅ Back",
+			Text:         h.trans.Admin.Back,
 			CallbackData: fmt.Sprintf("catmgr:clonegrp:%d:%d", catID, targetChatID),
 		}},
 	}
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      chatID,
 		MessageID:   editMsgID,
-		Text:        "Linear team key for the clone:",
+		Text:        h.trans.Category.EnterNewTeamKey,
 		ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows},
 	})
 }
@@ -531,7 +531,7 @@ func (h *Handler) execClone(ctx context.Context, b *tgbot.Bot, chatID int64, edi
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    chatID,
 			MessageID: editMsgID,
-			Text:      fmt.Sprintf("❌ Clone failed: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.ClonedFailed, err),
 		})
 		return
 	}
@@ -557,25 +557,25 @@ func (h *Handler) showTopicPickerForCatMgr(ctx context.Context, b *tgbot.Bot, ch
 	rows := make([][]models.InlineKeyboardButton, 0)
 	for _, t := range sortTopics(topics) {
 		rows = append(rows, []models.InlineKeyboardButton{{
-			Text:         "📌 " + t.Name,
+			Text:         fmt.Sprintf(h.trans.Category.TopicLevel, t.Name),
 			CallbackData: fmt.Sprintf("catmgr:settopic:%d:%d:%d", catID, targetChatID, t.ThreadID),
 		}})
 	}
 	if len(rows) == 0 {
 		rows = append(rows, []models.InlineKeyboardButton{{
-			Text:         "⚠️ No topics registered for this group",
+			Text:         h.trans.Admin.NoTopicsYet,
 			CallbackData: fmt.Sprintf("catmgr:detail:%d", catID),
 		}})
 	}
 	rows = append(rows, []models.InlineKeyboardButton{{
-		Text:         "⬅ Back",
+		Text:         h.trans.Admin.Back,
 		CallbackData: fmt.Sprintf("catmgr:detail:%d", catID),
 	}})
 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      chatID,
 		MessageID:   editMsgID,
-		Text:        "📌 Select topic:",
+		Text:        h.trans.Category.SelectTopic,
 		ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows},
 	})
 }

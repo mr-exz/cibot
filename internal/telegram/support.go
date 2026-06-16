@@ -78,9 +78,9 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 func (h *Handler) handleMyLinear(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	current, _ := h.storage.GetUserLinearUsername(ctx, msg.From.ID)
 
-	text := "👤 Enter your Linear username:"
+	text := h.trans.Person.EnterNewUsername
 	if current != "" {
-		text = "👤 Current Linear account: " + current + "\n\nEnter a new username to update:"
+		text = fmt.Sprintf(h.trans.Person.CurrentLinearAccount, current)
 	}
 
 	params := &tgbot.SendMessageParams{
@@ -130,7 +130,7 @@ func (h *Handler) handleCategoryCallback(ctx context.Context, b *tgbot.Bot, upda
 	// Answer callback
 	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
-		Text:            "Loading...",
+		Text:            h.trans.Common.Loading,
 	})
 
 	// Get category details
@@ -189,7 +189,7 @@ func (h *Handler) handleCategoryCallback(ctx context.Context, b *tgbot.Bot, upda
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:      pending.ChatID,
 			MessageID:   pending.MessageID,
-			Text:        "✓ " + catLabel + "\n\nSelect priority:",
+			Text:        fmt.Sprintf(h.trans.Ticket.SelectPriority, catLabel),
 			ReplyMarkup: buildPriorityKeyboard(),
 		})
 	} else {
@@ -199,7 +199,7 @@ func (h *Handler) handleCategoryCallback(ctx context.Context, b *tgbot.Bot, upda
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:      pending.ChatID,
 			MessageID:   pending.MessageID,
-			Text:        "✓ " + catLabel + "\n\n📋 Select request type:",
+			Text:        fmt.Sprintf(h.trans.Ticket.UnderCategory, catLabel),
 			ReplyMarkup: buildRequestTypeKeyboard(types),
 		})
 	}
@@ -223,7 +223,7 @@ func (h *Handler) handleRequestTypeCallback(ctx context.Context, b *tgbot.Bot, u
 	// Answer callback
 	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
-		Text:            "✓ Selected",
+		Text:            h.trans.Common.Selected,
 	})
 
 	key := stateKey{UserID: query.From.ID}
@@ -257,7 +257,7 @@ func (h *Handler) handleRequestTypeCallback(ctx context.Context, b *tgbot.Bot, u
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      pending.ChatID,
 		MessageID:   pending.MessageID,
-		Text:        "✓ " + pending.TypeName + "\n\nSelect priority:",
+		Text:        fmt.Sprintf(h.trans.Ticket.SelectPriority, pending.TypeName),
 		ReplyMarkup: buildPriorityKeyboard(),
 	})
 }
@@ -310,7 +310,7 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    pending.ChatID,
 				MessageID: pending.MessageID,
-				Text:      "❌ Linear username cannot be empty. Please enter your Linear username:",
+				Text:      h.trans.Error.LinearUsernameEmpty,
 			})
 			return
 		}
@@ -329,7 +329,7 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    pending.ChatID,
 				MessageID: pending.MessageID,
-				Text:      "✅ Linear account set: " + text,
+				Text:      fmt.Sprintf(h.trans.Person.LinearAccountSet, text),
 			})
 			return
 		}
@@ -339,7 +339,7 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    pending.ChatID,
 				MessageID: pending.MessageID,
-				Text:      "❌ No categories configured. Contact admin.",
+				Text:      h.trans.Ticket.NoCategories,
 			})
 			h.mu.Lock()
 			delete(h.states, key)
@@ -347,9 +347,9 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 			return
 		}
 
-		prompt := "🗂️ Select issue category:"
+		prompt := h.trans.Ticket.SelectCategory2
 		if pending.Flow == FlowTicket {
-			prompt = "🗂️ Select category for this ticket:"
+			prompt = h.trans.Ticket.SelectCategory
 		}
 
 		h.mu.Lock()
@@ -359,7 +359,7 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:      pending.ChatID,
 			MessageID:   pending.MessageID,
-			Text:        "✓ Linear account linked.\n\n" + prompt,
+			Text:        h.trans.Ticket.DescriptionSaved + "\n\n" + prompt,
 			ReplyMarkup: buildCategoryKeyboard(categories),
 		})
 
@@ -387,7 +387,7 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    pending.ChatID,
 				MessageID: pending.MessageID,
-				Text:      "❌ No categories configured. Contact admin.",
+				Text:      h.trans.Ticket.NoCategories,
 			})
 			h.mu.Lock()
 			delete(h.states, key)
@@ -404,7 +404,7 @@ func (h *Handler) handleSupportPendingIssue(ctx context.Context, b *tgbot.Bot, m
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:      pending.ChatID,
 			MessageID:   pending.MessageID,
-			Text:        "✓ Description saved.\n\n🗂️ Select issue category:",
+			Text:        h.trans.Ticket.DescriptionSaved,
 			ReplyMarkup: buildCategoryKeyboard(categories),
 		})
 	}
@@ -459,7 +459,7 @@ func (h *Handler) createSupportIssue(ctx context.Context, b *tgbot.Bot, pending 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    pending.ChatID,
 			MessageID: pending.MessageID,
-			Text:      fmt.Sprintf("❌ Failed to create issue: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.FailedCreateIssue, err),
 		})
 		return
 	}
@@ -483,10 +483,7 @@ func (h *Handler) createSupportIssue(ctx context.Context, b *tgbot.Bot, pending 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    pending.ChatID,
 		MessageID: pending.MessageID,
-		Text: fmt.Sprintf(
-			"✅ Issue created!\n\n"+
-				"📋 Category: %s\n"+
-				"👤 Assigned to: %s",
+		Text: fmt.Sprintf(h.trans.Ticket.CreatedSuccess,
 			pending.CategoryName,
 			assigneeStr,
 		),

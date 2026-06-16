@@ -284,7 +284,7 @@ func Load(lang Lang) (*Translations, error) {
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load translations for %s: %w", langCode, err)
+		return nil, fmt.Errorf("failed to load translations for %s from %s: %w", langCode, filename, err)
 	}
 
 	var t Translations

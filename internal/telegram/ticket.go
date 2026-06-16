@@ -17,7 +17,7 @@ import (
 // message — that message is used as the ticket source. Returns an error otherwise.
 func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	if msg.ReplyToMessage == nil {
-		h.sendMessage(ctx, b, msg, "⚠️ /ticket requires a reply. Reply to a message to create a ticket from it, or use /ticket_manual to describe the issue yourself.")
+		h.sendMessage(ctx, b, msg, h.trans.Ticket.ReplyRequired)
 		return
 	}
 
@@ -25,7 +25,7 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 	// (the service message that created the topic), whose ID equals the thread ID.
 	// This is not a real user reply — show an error.
 	if msg.MessageThreadID != 0 && msg.ReplyToMessage.ID == msg.MessageThreadID {
-		h.sendMessage(ctx, b, msg, "⚠️ /ticket requires a reply to a user message. Use /ticket_manual to describe the issue yourself.")
+		h.sendMessage(ctx, b, msg, h.trans.Ticket.ReplyToUserMessage)
 		return
 	}
 
@@ -58,12 +58,12 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 
 	categories, err := h.storage.ListCategoriesForContext(ctx, msg.Chat.ID, msg.MessageThreadID)
 	if err != nil {
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to load categories: %v", err))
+		h.sendMessage(ctx, b, msg, fmt.Sprintf(h.trans.Error.FailedLoadCategories, err))
 		return
 	}
 	if len(categories) == 0 {
 		if msg.Chat.Type == "private" {
-			h.sendMessage(ctx, b, msg, "⚠️ /ticket must be used in a group chat, not here in DM.")
+			h.sendMessage(ctx, b, msg, h.trans.Ticket.MustBeInGroup)
 		} else {
 			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID, msg.MessageThreadID))
 		}
@@ -72,7 +72,7 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 
 	// linearUsername, _ := h.storage.GetUserLinearUsername(ctx, msg.From.ID)
 
-	text := "🗂️ Select category for this ticket:"
+	text := h.trans.Ticket.SelectCategory
 	// if linearUsername == "" {
 	// 	text = "⚠️ Your Telegram account is not linked to Linear. Use /mylinear to link it.\n\n" + text
 	// }
@@ -135,7 +135,7 @@ func (h *Handler) handleCancelCallback(ctx context.Context, b *tgbot.Bot, update
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    msg.Chat.ID,
 		MessageID: msg.ID,
-		Text:      "❌ Cancelled.",
+		Text:      h.trans.Admin.Cancelled,
 	})
 	log.Printf("✓ Flow cancelled by %s", query.From.Username)
 }
@@ -148,29 +148,30 @@ func (h *Handler) buildUnconfiguredTopicMsg(ctx context.Context, chatID int64, m
 
 	topics, err := h.storage.ListConfiguredTopicsForChat(ctx, chatID)
 	if err != nil {
-		return "⚠️ Support is not configured for this group. Contact an admin."
+		return h.trans.Thread.NoCategories
 	}
 
 	if len(topics) == 0 {
 		if hasTopics {
-			return "⚠️ This topic is not configured for support tickets yet. Contact an admin."
+			return h.trans.Thread.NoCategories
 		}
-		return "⚠️ Support is not configured for this group. Contact an admin."
+		return h.trans.Thread.NoCategories
 	}
 
 	if hasTopics {
-		msg := "⚠️ This topic is not configured for support tickets yet.\n\nYou can use /ticket in:"
+		msg := h.trans.Thread.NoCategories + "\n\nYou can use /ticket in:"
 		for _, t := range topics {
 			msg += "\n• " + t
 		}
 		return msg
 	}
 
-	msg := "⚠️ Support is not configured in this group yet.\n\nYou can use /ticket in:"
+	msg := h.trans.Thread.NoCategories + "\n\nYou can use /ticket in:"
 	for _, t := range topics {
 		msg += "\n• " + t
 	}
 	return msg
+
 }
 
 // uploadTicketMedia downloads each media file from Telegram, uploads it to Linear, and returns
@@ -285,7 +286,7 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 	}
 
 	if onDutyResult != nil && !onDutyResult.Online {
-		description += "\n\n⚠️ **Note:** Assigned person is currently outside working hours."
+		description += "\n\n⚠️ **Note:**" + h.trans.Thread.AssignedPersonOfflineWarning
 	}
 
 	issue, err := h.linear.CreateIssue(ctx, title, description, pending.TeamKey, assignee, []string{pending.CategoryName, pending.TypeName, priorityName(pending.Priority)}, pending.Priority)
@@ -294,7 +295,7 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    pending.ChatID,
 			MessageID: pending.MessageID,
-			Text:      fmt.Sprintf("❌ Failed to create issue: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.FailedCreateIssue, err),
 		})
 		return
 	}
@@ -324,16 +325,13 @@ func (h *Handler) createTicketIssue(ctx context.Context, b *tgbot.Bot, pending *
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    pending.ChatID,
 		MessageID: pending.MessageID,
-		Text: fmt.Sprintf(
-			"✅ Ticket created!\n\n"+
-				"📋 Category: %s\n"+
-				"👤 Assigned to: %s",
+		Text: fmt.Sprintf(h.trans.Ticket.CreatedSuccess,
 			pending.CategoryName,
 			assigneeStr,
 		),
 		ReplyMarkup: &models.InlineKeyboardMarkup{
 			InlineKeyboard: [][]models.InlineKeyboardButton{
-				{{Text: "Linear: " + issue.Identifier, URL: issue.URL}},
+				{{Text: fmt.Sprintf(h.trans.Thread.LinearIssue, issue.Identifier), URL: issue.URL}},
 			},
 		},
 	})
