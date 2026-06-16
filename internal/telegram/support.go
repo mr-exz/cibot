@@ -19,13 +19,13 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 	// Load categories from DB (topic-aware: show global + topic-specific categories)
 	categories, err := h.storage.ListCategoriesForContext(ctx, msg.Chat.ID, msg.MessageThreadID)
 	if err != nil {
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to load categories: %v", err))
+		h.sendMessage(ctx, b, msg, fmt.Sprintf(h.trans.Error.FailedLoadCategories, err))
 		return
 	}
 
 	if len(categories) == 0 {
 		if msg.Chat.Type == "private" {
-			h.sendMessage(ctx, b, msg, "⚠️ /ticket must be used in a group chat, not here in DM.")
+			h.sendMessage(ctx, b, msg, h.trans.Ticket.MustBeInGroup)
 		} else {
 			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID, msg.MessageThreadID))
 		}
@@ -35,7 +35,7 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 	// linearUsername, _ := h.storage.GetUserLinearUsername(ctx, msg.From.ID)
 	reporterName := strings.TrimSpace(msg.From.FirstName + " " + msg.From.LastName)
 
-	text := "📝 Describe your issue (you can also attach a photo or file):"
+	text := h.trans.Ticket.DescribeIssue
 	// if linearUsername == "" {
 	// 	text = "⚠️ Your Telegram account is not linked to Linear. Use /mylinear to link it.\n\n" + text
 	// }

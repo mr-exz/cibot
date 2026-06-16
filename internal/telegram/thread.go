@@ -32,15 +32,15 @@ func techThreadKey(chatID int64, threadID int) string {
 // category's Linear team key is used to create the issue.
 func (h *Handler) handleThread(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	if h.cfg.TechGroupID == 0 {
-		h.sendMessage(ctx, b, msg, "⚠️ TECH_GROUP_ID is not configured. Ask the administrator to set it.")
+		h.sendMessage(ctx, b, msg, h.trans.Thread.TechGroupNotConfigured)
 		return
 	}
 	if msg.ReplyToMessage == nil {
-		h.sendMessage(ctx, b, msg, "⚠️ /thread requires a reply. Reply to a message to open a technical thread for it.")
+		h.sendMessage(ctx, b, msg, h.trans.Thread.ReplyRequired)
 		return
 	}
 	if msg.MessageThreadID != 0 && msg.ReplyToMessage.ID == msg.MessageThreadID {
-		h.sendMessage(ctx, b, msg, "⚠️ /thread requires a reply to a user message, not the topic header.")
+		h.sendMessage(ctx, b, msg, h.trans.Thread.ReplyToUserMessage)
 		return
 	}
 
@@ -64,18 +64,18 @@ func (h *Handler) handleThread(ctx context.Context, b *tgbot.Bot, msg *models.Me
 
 	categories, err := h.storage.ListCategoriesForContext(ctx, msg.Chat.ID, msg.MessageThreadID)
 	if err != nil {
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to load categories: %v", err))
+		h.sendMessage(ctx, b, msg, fmt.Sprintf(h.trans.Error.FailedLoadCategories, err))
 		return
 	}
 	if len(categories) == 0 {
-		h.sendMessage(ctx, b, msg, "⚠️ No categories configured for this context.")
+		h.sendMessage(ctx, b, msg, h.trans.Thread.NoCategories)
 		return
 	}
 
 	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
 		ChatID:          msg.Chat.ID,
 		MessageThreadID: msg.MessageThreadID,
-		Text:            "🗂️ Select category for this thread:",
+		Text:            h.trans.Thread.SelectCategory,
 		ReplyMarkup:     buildCategoryKeyboard(categories),
 	})
 	if err != nil {
@@ -142,7 +142,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    pending.ChatID,
 			MessageID: pending.MessageID,
-			Text:      fmt.Sprintf("❌ Failed to create Linear issue: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.FailedCreateIssue, err),
 		})
 		return
 	}
@@ -155,7 +155,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    pending.ChatID,
 			MessageID: pending.MessageID,
-			Text:      fmt.Sprintf("❌ Failed to create Telegram topic: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.FailedCreateTopic, err),
 		})
 		return
 	}
@@ -169,7 +169,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 
 	// Notify reporter in original chat about the new thread
 	if pending.ReporterUsername != "" {
-		mentionMsg := fmt.Sprintf("@%s — A tech thread was created for your message!\n🔗 Topic: %s", pending.ReporterUsername, issue.Identifier)
+		mentionMsg := fmt.Sprintf(h.trans.Thread.MentionNotification, pending.ReporterUsername, issue.Identifier)
 		b.SendMessage(ctx, &tgbot.SendMessageParams{
 			ChatID:          pending.ChatID,
 			MessageThreadID: pending.ThreadID,
@@ -177,7 +177,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 		})
 	}
 
-	onCallLine := "On call: (unassigned)"
+	onCallLine := h.trans.Thread.OnCallUnassigned
 	var pingButton *models.InlineKeyboardButton
 	if onDutyResult != nil && onDutyResult.Person != nil {
 		p := onDutyResult.Person
@@ -185,7 +185,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 		if !onDutyResult.Online {
 			status = "🔴"
 		}
-		onCallLine = fmt.Sprintf("On call: %s %s", p.Name, status)
+		onCallLine = fmt.Sprintf(h.trans.Thread.OnCall, p.Name, status)
 		if p.WorkHours != "" && p.Timezone != "" {
 			groupTZ := "UTC"
 			if tz, err := h.storage.GetGroupTimezone(ctx, h.cfg.TechGroupID); err == nil && tz != "" {
@@ -194,14 +194,14 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 			displayHours := convertWorkHours(p.WorkHours, p.Timezone, groupTZ)
 			onCallLine += fmt.Sprintf(" (hours: %s %s)", displayHours, groupTZ)
 		}
-		btn := models.InlineKeyboardButton{Text: "Ping " + p.Name, CallbackData: "ping:" + p.TelegramUsername}
+		btn := models.InlineKeyboardButton{Text: fmt.Sprintf(h.trans.Thread.PingName, p.Name), CallbackData: "ping:" + p.TelegramUsername}
 		pingButton = &btn
 	}
 
 	topicMsgParams := &tgbot.SendMessageParams{
 		ChatID:          h.cfg.TechGroupID,
 		MessageThreadID: topic.MessageThreadID,
-		Text:            fmt.Sprintf("Linear: %s\nCategory: %s %s\n%s\n\nUse /close when done to dump this thread to the issue.", issue.URL, pending.TypeName, pending.CategoryName, onCallLine),
+		Text:            fmt.Sprintf("Linear: %s\nCategory: %s %s\n%s\n\n%s", issue.URL, pending.TypeName, pending.CategoryName, onCallLine, h.trans.Thread.UseCloseToDump),
 	}
 	if pingButton != nil {
 		topicMsgParams.ReplyMarkup = &models.InlineKeyboardMarkup{
@@ -237,32 +237,24 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 	delete(h.states, stateKey{UserID: pending.UserID})
 	h.mu.Unlock()
 
-	confirmText := fmt.Sprintf("✅ Thread opened! Category: %s %s\n\nHere's what to do next:\n\n", pending.TypeName, pending.CategoryName) +
-		"1️⃣ Join the tech group\n" +
-		"2️⃣ Go to the topic to chat about the case\n" +
-		"3️⃣ Use /close when done to update the Linear task\n"
+	confirmText := fmt.Sprintf(h.trans.Thread.CreatedSuccess, pending.TypeName, pending.CategoryName) + h.trans.Thread.CreatedSuccessNext
 
 	if onDutyResult != nil && !onDutyResult.Online {
-		confirmText += "\n⚠️ Assigned person is currently outside working hours."
+		confirmText += h.trans.Thread.AssignedPersonOfflineWarning
 	}
 
 	topicLink := telegramTopicLink(h.cfg.TechGroupID, topic.MessageThreadID)
 	inviteLink := h.getTechGroupInviteLink(ctx, b)
 
-	// Build buttons grid: [join, go-to-topic], [linear, close-info]
+	// Build buttons grid: [join, go-to-topic] only — Linear button shown when thread closes
 	var buttons [][]models.InlineKeyboardButton
 
 	row1 := []models.InlineKeyboardButton{}
 	if inviteLink != "" {
-		row1 = append(row1, models.InlineKeyboardButton{Text: "1 Join group", URL: inviteLink})
+		row1 = append(row1, models.InlineKeyboardButton{Text: h.trans.Thread.JoinGroup, URL: inviteLink})
 	}
-	row1 = append(row1, models.InlineKeyboardButton{Text: "2 Go to topic", URL: topicLink})
+	row1 = append(row1, models.InlineKeyboardButton{Text: h.trans.Thread.GoToTopic, URL: topicLink})
 	buttons = append(buttons, row1)
-
-	row2 := []models.InlineKeyboardButton{
-		{Text: "📋 Linear: " + issue.Identifier, URL: issue.URL},
-	}
-	buttons = append(buttons, row2)
 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    pending.ChatID,
@@ -279,11 +271,11 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 // Must be used inside a tech group topic.
 func (h *Handler) handleCloseThread(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	if h.cfg.TechGroupID == 0 {
-		h.sendMessage(ctx, b, msg, "⚠️ TECH_GROUP_ID is not configured.")
+		h.sendMessage(ctx, b, msg, h.trans.Thread.TechGroupNotConfigured)
 		return
 	}
 	if msg.Chat.ID != h.cfg.TechGroupID || msg.MessageThreadID == 0 {
-		h.sendMessage(ctx, b, msg, "⚠️ /close must be used inside a tech thread topic.")
+		h.sendMessage(ctx, b, msg, h.trans.Thread.NotInTechTopic)
 		return
 	}
 
@@ -302,11 +294,11 @@ func (h *Handler) handleCloseThread(ctx context.Context, b *tgbot.Bot, msg *mode
 		var err error
 		tt, err = h.storage.GetTechThreadByTopic(ctx, msg.Chat.ID, msg.MessageThreadID)
 		if err != nil {
-			h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ DB error: %v", err))
+			h.sendMessage(ctx, b, msg, fmt.Sprintf(h.trans.Error.DBError, err))
 			return
 		}
 		if tt == nil {
-			h.sendMessage(ctx, b, msg, "⚠️ No open thread found for this topic.")
+			h.sendMessage(ctx, b, msg, h.trans.Error.NoOpenThread)
 			return
 		}
 		var empty sync.WaitGroup
@@ -320,10 +312,10 @@ func (h *Handler) handleCloseThread(ctx context.Context, b *tgbot.Bot, msg *mode
 	b.SendMessage(ctx, &tgbot.SendMessageParams{
 		ChatID:          msg.Chat.ID,
 		MessageThreadID: msg.MessageThreadID,
-		Text:            "✅ Thread closed. Uploading messages and files to Linear in the background...",
+		Text:            h.trans.Thread.ThreadClosed,
 		ReplyMarkup: &models.InlineKeyboardMarkup{
 			InlineKeyboard: [][]models.InlineKeyboardButton{{
-				{Text: "🔗 Open Linear issue", URL: tt.LinearIssueURL},
+				{Text: h.trans.Thread.OpenLinearIssue, URL: tt.LinearIssueURL},
 			}},
 		},
 	})
@@ -584,8 +576,8 @@ func (h *Handler) uploadThreadData(b *tgbot.Bot, tt *storage.TechThread, chatID 
 	// Build comment: parse messages.txt and interleave files with their messages.
 	msgData, _ := os.ReadFile(filepath.Join(tt.FilePath, "messages.txt"))
 	var sb strings.Builder
-	sb.WriteString("## Telegram Thread\n\n")
-	sb.WriteString(fmt.Sprintf("Closed by @%s on %s\n", closedBy, time.Now().UTC().Format("2006-01-02 15:04 UTC")))
+	sb.WriteString(h.trans.Thread.TelegramThread)
+	sb.WriteString(fmt.Sprintf(h.trans.Thread.ClosedByOn, closedBy, time.Now().UTC().Format("2006-01-02 15:04 UTC")))
 	if len(msgData) > 0 {
 		sb.WriteString("\n---\n\n")
 		lines := strings.Split(string(msgData), "\n")
@@ -621,9 +613,9 @@ func (h *Handler) uploadThreadData(b *tgbot.Bot, tt *storage.TechThread, chatID 
 	os.RemoveAll(tt.FilePath)
 
 	elapsed := time.Since(start).Round(time.Second)
-	text := fmt.Sprintf("✅ Upload complete. Took %s.", elapsed)
+	text := fmt.Sprintf(h.trans.Thread.UploadComplete, elapsed)
 	if uploaded > 0 {
-		text = fmt.Sprintf("✅ Upload complete. Took %s. %d file(s) attached to the Linear issue.", elapsed, uploaded)
+		text = fmt.Sprintf(h.trans.Thread.UploadCompleteWithFiles, elapsed, uploaded)
 	}
 	b.SendMessage(ctx, &tgbot.SendMessageParams{
 		ChatID:          chatID,

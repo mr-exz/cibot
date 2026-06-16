@@ -67,6 +67,9 @@ A support ticket bot in **Go** that integrates with **Telegram** and **Linear** 
 - `DB_PATH` (optional, default: `cibot.db`) — SQLite database file path
 - `ADMIN_USERNAMES` (optional) — Comma-separated Telegram usernames allowed to use admin commands (with or without @)
   - Example: `ADMIN_USERNAMES=@alice,@charlie`
+- `BOT_LANGUAGE` (optional, default: `eng`) — Bot language code
+  - `eng` — English (default)
+  - `ru` — Russian
 - `TECH_GROUP_ID` (optional) — Telegram group ID where `/thread` creates topics; required to use the `/thread` and `/close` commands
 - `DNS_EMAIL` (optional) — ps.kz account email for DNS management; enables `/dns` when set together with `DNS_PASSWORD`
 - `DNS_PASSWORD` (optional) — ps.kz account password for DNS management

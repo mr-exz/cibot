@@ -2,7 +2,12 @@
 
 ## [0.0.93]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- **Multilingual support**: All user-facing messages moved to YAML translation files (`resources/i18n/eng.yaml`, `resources/i18n/ru.yaml`). Bot defaults to English; framework is ready for per-user language detection and additional languages.
+- Translation system: `internal/i18n/` package provides structured translation loading and fallback support
+
+### Changed
+- Thread creation flow: Linear issue link button removed from initial response. Now shows only "Join group" and "Go to topic" buttons. Linear link button reappears when thread is closed via `/close`, giving users a cleaner flow without premature issue access.
 
 
 ## [0.0.92]

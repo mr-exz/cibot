@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -11,6 +12,7 @@ import (
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/mr-exz/cibot/internal/config"
+	"github.com/mr-exz/cibot/internal/i18n"
 	"github.com/mr-exz/cibot/internal/linear"
 	"github.com/mr-exz/cibot/internal/msglog"
 	"github.com/mr-exz/cibot/internal/storage"
@@ -27,6 +29,7 @@ type Handler struct {
 	cfg                 *config.Config
 	version             string
 	msglog              *msglog.Logger
+	trans               *i18n.Translations // localized messages
 	mu                  sync.Mutex
 	states              map[stateKey]interface{} // can hold *pendingSession or *pendingAdminSession
 	topics              map[int64]map[int]string // chat_id -> (thread_id -> topic_name)
@@ -42,12 +45,36 @@ type Handler struct {
 }
 
 func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *config.Config, version string) (*tgbot.Bot, error) {
+	// Load translations from env or default to English
+	langCode := os.Getenv("BOT_LANGUAGE")
+	if langCode == "" {
+		langCode = "eng"
+	}
+
+	var lang i18n.Lang
+	switch langCode {
+	case "eng":
+		lang = i18n.English
+	case "ru":
+		lang = i18n.Russian
+	default:
+		log.Printf("⚠️  Unknown language '%s', defaulting to Russian", langCode)
+		lang = i18n.Russian
+	}
+
+	trans, err := i18n.Load(lang)
+	if err != nil {
+		log.Printf("⚠️  Failed to load translations for %s, using empty: %v", langCode, err)
+		trans = &i18n.Translations{}
+	}
+
 	h := &Handler{
 		linear:         linearClient,
 		storage:        db,
 		cfg:            cfg,
 		version:        version,
 		msglog:         msglog.New(cfg.CSVPath),
+		trans:          trans,
 		states:         make(map[stateKey]interface{}),
 		topics:         make(map[int64]map[int]string),
 		groups:         make(map[int64]string),
