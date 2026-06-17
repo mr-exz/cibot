@@ -22,7 +22,7 @@ func (h *Handler) sendGroupsList(ctx context.Context, b *tgbot.Bot, chatID int64
 	}
 
 	if len(groups) == 0 {
-		text := "No groups registered yet. The bot will auto-register groups when it receives messages."
+		text := h.trans.Admin.NoGroupsRegistered
 		if editMsgID != 0 {
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{ChatID: chatID, MessageID: editMsgID, Text: text})
 		} else {
@@ -41,7 +41,7 @@ func (h *Handler) sendGroupsList(ctx context.Context, b *tgbot.Bot, chatID int64
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("📋 Groups (%d approved, %d pending):\n", approved, pending))
+	sb.WriteString(fmt.Sprintf(h.trans.Group.RegisterGroups, approved, pending))
 
 	rows := make([][]models.InlineKeyboardButton, 0, len(groups)*2)
 	for _, g := range groups {
@@ -62,12 +62,12 @@ func (h *Handler) sendGroupsList(ctx context.Context, b *tgbot.Bot, chatID int64
 		var actionBtn models.InlineKeyboardButton
 		if g.Approved {
 			actionBtn = models.InlineKeyboardButton{
-				Text:         fmt.Sprintf("❌ Disapprove %s", title),
+				Text:         h.trans.Admin.RejectGroup,
 				CallbackData: fmt.Sprintf("disapprove:%d", g.ChatID),
 			}
 		} else {
 			actionBtn = models.InlineKeyboardButton{
-				Text:         fmt.Sprintf("✅ Approve %s", title),
+				Text:         fmt.Sprintf(h.trans.Admin.ApproveGroup, title),
 				CallbackData: fmt.Sprintf("approve:%d", g.ChatID),
 			}
 		}
@@ -198,14 +198,14 @@ func (h *Handler) showGroupTZPicker(ctx context.Context, b *tgbot.Bot, adminChat
 
 	// Add a Back button at the bottom
 	kb.InlineKeyboard = append(kb.InlineKeyboard, []models.InlineKeyboardButton{{
-		Text:         "⬅️ Back",
+		Text:         h.trans.Admin.Back,
 		CallbackData: fmt.Sprintf("grptz:back:%d", groupChatID),
 	}})
 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      adminChatID,
 		MessageID:   msgID,
-		Text:        "Select timezone for this group:",
+		Text:        h.trans.Person.EnterTimezone,
 		ReplyMarkup: kb,
 	})
 }

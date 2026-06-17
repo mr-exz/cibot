@@ -20,7 +20,7 @@ func (h *Handler) handleSetLabelForward(ctx context.Context, b *tgbot.Bot, msg *
 	origin := msg.ForwardOrigin.MessageOriginUser.SenderUser
 	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
 		ChatID: msg.Chat.ID,
-		Text:   fmt.Sprintf("👤 User: %s (@%s)\n\n✏️ Enter the label to set:", strings.TrimSpace(origin.FirstName+" "+origin.LastName), origin.Username),
+		Text:   fmt.Sprintf("👤 %s (@%s)\n\n%s", strings.TrimSpace(origin.FirstName+" "+origin.LastName), origin.Username, h.trans.Admin.SetUserLabel),
 	})
 	if err != nil {
 		log.Printf("❌ handleSetLabelForward send: %v", err)
@@ -49,7 +49,7 @@ func (h *Handler) handleAddCategory(ctx context.Context, b *tgbot.Bot, msg *mode
 
 	dbGroups, err := h.storage.ListGroups(ctx)
 	if err != nil {
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to load groups: %v", err))
+		h.sendMessage(ctx, b, msg, fmt.Sprintf(h.trans.Error.FailedLoadGroups, err))
 		return
 	}
 
@@ -61,18 +61,18 @@ func (h *Handler) handleAddCategory(ctx context.Context, b *tgbot.Bot, msg *mode
 	}
 
 	if len(groups) == 0 {
-		h.sendMessage(ctx, b, msg, "⚠️ No approved groups registered yet.")
+		h.sendMessage(ctx, b, msg, h.trans.Category.NoApprovedGroups)
 		return
 	}
 
 	keyboard := buildGroupKeyboard(groups)
 	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []models.InlineKeyboardButton{{
-		Text: "❌ Cancel", CallbackData: "cancel",
+		Text: h.trans.Admin.Cancel, CallbackData: "cancel",
 	}})
 
 	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
 		ChatID:          msg.Chat.ID,
-		Text:            "🏘️ Select group:",
+		Text:            h.trans.Admin.SelectGroup,
 		MessageThreadID: msg.MessageThreadID,
 		ReplyMarkup:     keyboard,
 	})
@@ -116,19 +116,19 @@ func (h *Handler) handleSetWorkHours(ctx context.Context, b *tgbot.Bot, msg *mod
 	// Get all support persons to show selection
 	persons, err := h.storage.ListAllSupportPersons(ctx)
 	if err != nil {
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to load support persons: %v", err))
+		h.sendMessage(ctx, b, msg, fmt.Sprintf(h.trans.Error.FailedLoadPersons, err))
 		return
 	}
 
 	if len(persons) == 0 {
-		h.sendMessage(ctx, b, msg, "❌ No support persons available. Add one first with /addperson")
+		h.sendMessage(ctx, b, msg, h.trans.Person.NoPersonsAvailable)
 		return
 	}
 
 	keyboard := buildPersonKeyboard(persons)
 	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
 		ChatID:          msg.Chat.ID,
-		Text:            "👤 Select person:",
+		Text:            h.trans.Person.SelectPerson,
 		ReplyMarkup:     keyboard,
 		MessageThreadID: msg.MessageThreadID,
 	})
@@ -156,7 +156,7 @@ func (h *Handler) handleSetWorkHours(ctx context.Context, b *tgbot.Bot, msg *mod
 func (h *Handler) handleAddTopic(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	allGroups, err := h.storage.ListGroups(ctx)
 	if err != nil {
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to load groups: %v", err))
+		h.sendMessage(ctx, b, msg, fmt.Sprintf(h.trans.Error.FailedLoadGroups, err))
 		return
 	}
 	groups := make(map[int64]string)
@@ -170,7 +170,7 @@ func (h *Handler) handleAddTopic(ctx context.Context, b *tgbot.Bot, msg *models.
 		}
 	}
 	if len(groups) == 0 {
-		h.sendMessage(ctx, b, msg, "❌ No approved groups yet. Approve groups via /groups first.")
+		h.sendMessage(ctx, b, msg, h.trans.Category.NoApprovedGroups)
 		return
 	}
 
@@ -206,7 +206,7 @@ func (h *Handler) handleListTopics(ctx context.Context, b *tgbot.Bot, msg *model
 	allTopics := h.getAllTopics()
 
 	if len(allTopics) == 0 {
-		h.sendMessage(ctx, b, msg, "📭 No topics registered yet. Use /addtopic to register forum topics.")
+		h.sendMessage(ctx, b, msg, h.trans.Admin.NoTopicsYet)
 		return
 	}
 
@@ -244,17 +244,17 @@ func (h *Handler) handleUsers(ctx context.Context, b *tgbot.Bot, msg *models.Mes
 func (h *Handler) sendUsersPage(ctx context.Context, b *tgbot.Bot, chatID int64, existingMsgID int, offset int) {
 	total, err := h.storage.CountUsers(ctx)
 	if err != nil {
-		b.SendMessage(ctx, &tgbot.SendMessageParams{ChatID: chatID, Text: fmt.Sprintf("❌ %v", err)})
+		b.SendMessage(ctx, &tgbot.SendMessageParams{ChatID: chatID, Text: fmt.Sprintf(h.trans.Error.Failed, err)})
 		return
 	}
 	if total == 0 {
-		b.SendMessage(ctx, &tgbot.SendMessageParams{ChatID: chatID, Text: "📭 No users seen yet."})
+		b.SendMessage(ctx, &tgbot.SendMessageParams{ChatID: chatID, Text: h.trans.Admin.NoUsersYet})
 		return
 	}
 
 	users, err := h.storage.ListUsers(ctx, usersPageSize, offset)
 	if err != nil {
-		b.SendMessage(ctx, &tgbot.SendMessageParams{ChatID: chatID, Text: fmt.Sprintf("❌ %v", err)})
+		b.SendMessage(ctx, &tgbot.SendMessageParams{ChatID: chatID, Text: fmt.Sprintf(h.trans.Error.Failed, err)})
 		return
 	}
 
@@ -279,13 +279,13 @@ func (h *Handler) sendUsersPage(ctx context.Context, b *tgbot.Bot, chatID int64,
 	var navRow []models.InlineKeyboardButton
 	if offset > 0 {
 		navRow = append(navRow, models.InlineKeyboardButton{
-			Text:         "◀ Prev",
+			Text:         h.trans.Common.Prev,
 			CallbackData: fmt.Sprintf("usrp:%d", offset-usersPageSize),
 		})
 	}
 	if offset+usersPageSize < total {
 		navRow = append(navRow, models.InlineKeyboardButton{
-			Text:         "▶ Next",
+			Text:         h.trans.Common.Next,
 			CallbackData: fmt.Sprintf("usrp:%d", offset+usersPageSize),
 		})
 	}
@@ -293,7 +293,7 @@ func (h *Handler) sendUsersPage(ctx context.Context, b *tgbot.Bot, chatID int64,
 		rows = append(rows, navRow)
 	}
 
-	text := fmt.Sprintf("👥 Known users (%d–%d of %d):", offset+1, min(offset+len(users), total), total)
+	text := fmt.Sprintf(h.trans.Admin.KnownUsers, offset+1, min(offset+len(users), total), total)
 	keyboard := &models.InlineKeyboardMarkup{InlineKeyboard: rows}
 
 	if existingMsgID != 0 {
@@ -427,7 +427,7 @@ func (h *Handler) handleUserSetTagCallback(ctx context.Context, b *tgbot.Bot, up
 
 	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
 		ChatID: msg.Chat.ID,
-		Text:   fmt.Sprintf("👤 %s\n\n✏️ Enter the label to set:", displayName),
+		Text:   fmt.Sprintf("👤 %s\n\n%s", displayName, h.trans.Admin.SetUserLabel),
 	})
 	if err != nil {
 		return

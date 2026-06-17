@@ -16,11 +16,11 @@ func (h *Handler) handleOnCall(ctx context.Context, b *tgbot.Bot, msg *models.Me
 	categories, err := h.storage.ListCategoriesForContext(ctx, msg.Chat.ID, msg.MessageThreadID)
 	if err != nil {
 		log.Printf("❌ /oncall ListCategoriesForContext: %v", err)
-		h.sendMessage(ctx, b, msg, "Failed to load categories.")
+		h.sendMessage(ctx, b, msg, fmt.Sprintf(h.trans.Error.FailedLoadCategories, err))
 		return
 	}
 	if len(categories) == 0 {
-		h.sendMessage(ctx, b, msg, "No support categories configured for this area.")
+		h.sendMessage(ctx, b, msg, h.trans.Thread.NoCategories)
 		return
 	}
 
@@ -32,7 +32,7 @@ func (h *Handler) handleOnCall(ctx context.Context, b *tgbot.Bot, msg *models.Me
 	}
 
 	var sb strings.Builder
-	sb.WriteString("On-duty support:\n\n")
+	sb.WriteString(h.trans.OnDuty.OnDutySupport)
 
 	seen := map[string]bool{}
 	var pingUsernames []string
@@ -136,18 +136,18 @@ func (h *Handler) handlePingCallback(ctx context.Context, b *tgbot.Bot, update *
 
 func (h *Handler) handleSetStatus(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	if msg.From == nil || msg.From.Username == "" {
-		h.sendMessage(ctx, b, msg, "Cannot identify you. Please set a Telegram username first.")
+		h.sendMessage(ctx, b, msg, h.trans.Admin.UserNotInDatabase)
 		return
 	}
 
 	person, err := h.storage.GetSupportPersonByTelegramUsername(ctx, msg.From.Username)
 	if err != nil {
 		log.Printf("❌ GetSupportPersonByTelegramUsername @%s: %v", msg.From.Username, err)
-		h.sendMessage(ctx, b, msg, "Failed to look up your support profile.")
+		h.sendMessage(ctx, b, msg, h.trans.User.LookupFailed)
 		return
 	}
 	if person == nil {
-		h.sendMessage(ctx, b, msg, "You are not registered as a support person.")
+		h.sendMessage(ctx, b, msg, h.trans.Person.PersonNotFound)
 		return
 	}
 
@@ -232,7 +232,7 @@ func (h *Handler) handleSetStatus(ctx context.Context, b *tgbot.Bot, msg *models
 	}
 
 	if len(rotations) == 0 {
-		sb.WriteString("\nNot assigned to any category.\n")
+		sb.WriteString("\n(no categories)\n")
 	}
 	sb.WriteString("\nChange status:")
 
@@ -261,7 +261,7 @@ func (h *Handler) handleStatusCallback(ctx context.Context, b *tgbot.Bot, update
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    query.Message.Message.Chat.ID,
 			MessageID: query.Message.Message.ID,
-			Text:      "Cannot identify you. Please set a Telegram username first.",
+			Text:      h.trans.Admin.UserNotInDatabase,
 		})
 		return
 	}
@@ -275,7 +275,7 @@ func (h *Handler) handleStatusCallback(ctx context.Context, b *tgbot.Bot, update
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    query.Message.Message.Chat.ID,
 			MessageID: query.Message.Message.ID,
-			Text:      "You are not registered as a support person.",
+			Text:      h.trans.Person.PersonNotFound,
 		})
 		return
 	}

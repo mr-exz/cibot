@@ -8,21 +8,20 @@
 ## [0.0.94]
 
 ### Added
-- **Complete translations for core flows**: `/thread`, `/ticket`, `/ticket_manual`, and `/close` commands now fully support English and Russian — 105+ user-facing messages translated to YAML files (`resources/i18n/eng.yaml`, `resources/i18n/ru.yaml`)
-- Translation system with fallback: bot fails loudly on missing translation files instead of showing blank messages
+- **Complete multilingual support**: All 11 telegram handler files fully internationalized — 225 translation keys across all bot commands. English and Russian supported via YAML files (`resources/i18n/eng.yaml`, `resources/i18n/ru.yaml`). Covers all critical user flows: `/thread`, `/ticket`, `/ticket_manual`, admin commands, error messages, and success confirmations
+- Translation system: Bot fails with clear error message if translation files missing, instead of showing blank messages
 
 ### Fixed
-- Dockerfile now copies `resources/` directory to final image — translation files were missing from Docker deployments, causing `/thread` and other commands to fail with "message text is empty"
+- Dockerfile now copies `resources/` directory to final image — translation files were missing from Docker deployments, causing `/thread`, `/ticket`, and other commands to fail with "message text is empty"
+
+### Changed
+- `/thread` confirmation flow: removed Linear issue link button from initial response, now shows only "Join group" and "Go to topic" buttons; link button reappears when thread closes via `/close`
 
 
 ## [0.0.93]
 
 ### Added
-- **Multilingual support**: All user-facing messages moved to YAML translation files (`resources/i18n/eng.yaml`, `resources/i18n/ru.yaml`). Bot defaults to English; framework is ready for per-user language detection and additional languages.
-- Translation system: `internal/i18n/` package provides structured translation loading and fallback support
-
-### Changed
-- Thread creation flow: Linear issue link button removed from initial response. Now shows only "Join group" and "Go to topic" buttons. Linear link button reappears when thread is closed via `/close`, giving users a cleaner flow without premature issue access.
+- **Multilingual support framework**: Foundation for internationalization — `internal/i18n/` package provides structured translation loading with YAML files (`resources/i18n/eng.yaml`, `resources/i18n/ru.yaml`). Ready for per-user language detection and additional languages in future releases.
 
 
 ## [0.0.92]

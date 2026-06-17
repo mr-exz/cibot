@@ -26,7 +26,7 @@ func (h *Handler) handleTakeoverCategorySelected(ctx context.Context, b *tgbot.B
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("❌ Failed to load persons: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.FailedLoadPersonsList, err),
 		})
 		return
 	}
@@ -35,7 +35,7 @@ func (h *Handler) handleTakeoverCategorySelected(ctx context.Context, b *tgbot.B
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      "❌ No support persons available.",
+			Text:      h.trans.Person.NoPersonsAvailable,
 		})
 		return
 	}
@@ -57,7 +57,7 @@ func (h *Handler) handleTakeoverCategorySelected(ctx context.Context, b *tgbot.B
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      admin.ChatID,
 		MessageID:   admin.MessageID,
-		Text:        fmt.Sprintf("✓ Category: %s %s\n\n👤 Who is taking over?", cat.Emoji, cat.Name),
+		Text:        fmt.Sprintf(h.trans.Category.SelectWhoTakingOver, cat.Emoji, cat.Name),
 		ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows},
 	})
 }
@@ -121,25 +121,25 @@ func (h *Handler) handleTakeoverCallback(ctx context.Context, b *tgbot.Bot, upda
 		rows := [][]models.InlineKeyboardButton{
 			{
 				{
-					Text:         "🕐 Today only",
+					Text:         h.trans.Category.TodayOnly,
 					CallbackData: fmt.Sprintf("takeover:duration:%d:%d:today", categoryID, personID),
 				},
 			},
 			{
 				{
-					Text:         "📅 Until Friday",
+					Text:         h.trans.Category.UntilFriday,
 					CallbackData: fmt.Sprintf("takeover:duration:%d:%d:friday", categoryID, personID),
 				},
 			},
 			{
 				{
-					Text:         "📆 This week",
+					Text:         h.trans.Category.ThisWeek,
 					CallbackData: fmt.Sprintf("takeover:duration:%d:%d:%s", categoryID, personID, endOfWeekStr),
 				},
 			},
 			{
 				{
-					Text:         "❌ Cancel",
+					Text:         h.trans.Admin.Cancel,
 					CallbackData: "takeover:start",
 				},
 			},
@@ -194,11 +194,11 @@ func (h *Handler) handleTakeoverCallback(ctx context.Context, b *tgbot.Bot, upda
 		rows := [][]models.InlineKeyboardButton{
 			{
 				{
-					Text:         "✅ Confirm",
+					Text:         h.trans.Admin.Confirm,
 					CallbackData: fmt.Sprintf("takeover:confirm:%d:%d:%s:%s", categoryID, personID, fromDate, untilDate),
 				},
 				{
-					Text:         "❌ Cancel",
+					Text:         h.trans.Admin.Cancel,
 					CallbackData: "takeover:start",
 				},
 			},
@@ -238,7 +238,7 @@ func (h *Handler) handleTakeoverCallback(ctx context.Context, b *tgbot.Bot, upda
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    chatID,
 				MessageID: messageID,
-				Text:      fmt.Sprintf("❌ Failed to set takeover: %v", err),
+				Text:      fmt.Sprintf(h.trans.Error.Failed, err),
 			})
 			return
 		}
@@ -250,7 +250,7 @@ func (h *Handler) handleTakeoverCallback(ctx context.Context, b *tgbot.Bot, upda
 		rows := [][]models.InlineKeyboardButton{
 			{
 				{
-					Text:         "🔄 Clear takeover",
+					Text:         h.trans.Category.CancelTakeover,
 					CallbackData: fmt.Sprintf("takeover:clear:%d", categoryID),
 				},
 			},
@@ -276,7 +276,7 @@ func (h *Handler) handleTakeoverCallback(ctx context.Context, b *tgbot.Bot, upda
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    chatID,
 				MessageID: messageID,
-				Text:      fmt.Sprintf("❌ Failed to clear takeover: %v", err),
+				Text:      fmt.Sprintf(h.trans.Error.Failed, err),
 			})
 			return
 		}

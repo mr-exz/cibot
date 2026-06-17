@@ -25,27 +25,27 @@ type dnsRecord struct {
 // handleDNS is the entry point for the /dns command.
 func (h *Handler) handleDNS(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	if h.dns == nil {
-		h.sendMessage(ctx, b, msg, "DNS management is not configured. Set DNS_EMAIL and DNS_PASSWORD.")
+		h.sendMessage(ctx, b, msg, h.trans.DNS.NotConfigured)
 		return
 	}
 
 	keyboard := &models.InlineKeyboardMarkup{
 		InlineKeyboard: [][]models.InlineKeyboardButton{
 			{
-				{Text: "Accounts", CallbackData: "dns_act:accounts"},
-				{Text: "List records", CallbackData: "dns_act:list"},
+				{Text: h.trans.DNS.SelectAccount, CallbackData: "dns_act:accounts"},
+				{Text: h.trans.DNS.ListRecords, CallbackData: "dns_act:list"},
 			},
 			{
-				{Text: "Add record", CallbackData: "dns_act:add"},
-				{Text: "Delete record", CallbackData: "dns_act:del"},
+				{Text: h.trans.DNS.AddRecord, CallbackData: "dns_act:add"},
+				{Text: h.trans.DNS.DeleteRecord, CallbackData: "dns_act:del"},
 			},
-			{{Text: "Cancel", CallbackData: "cancel"}},
+			{{Text: h.trans.Admin.Cancel, CallbackData: "cancel"}},
 		},
 	}
 
 	sentMsg, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
 		ChatID:      msg.Chat.ID,
-		Text:        "DNS management - choose action:",
+		Text:        h.trans.DNS.SelectAction,
 		ReplyMarkup: keyboard,
 	})
 	if err != nil {
@@ -95,7 +95,7 @@ func (h *Handler) handleDNSActionCallback(ctx context.Context, b *tgbot.Bot, upd
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    msg.Chat.ID,
 				MessageID: msg.ID,
-				Text:      fmt.Sprintf("Error fetching accounts: %v", err),
+				Text:      fmt.Sprintf(h.trans.DNS.FailedFetchAccts, err),
 			})
 			return
 		}
@@ -116,7 +116,7 @@ func (h *Handler) handleDNSActionCallback(ctx context.Context, b *tgbot.Bot, upd
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    msg.Chat.ID,
 			MessageID: msg.ID,
-			Text:      fmt.Sprintf("Error fetching accounts: %v", err),
+			Text:      fmt.Sprintf(h.trans.DNS.FailedFetchAccts, err),
 		})
 		return
 	}
@@ -130,7 +130,7 @@ func (h *Handler) handleDNSActionCallback(ctx context.Context, b *tgbot.Bot, upd
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      msg.Chat.ID,
 		MessageID:   msg.ID,
-		Text:        "Select account:",
+		Text:        h.trans.DNS.SelectAccount,
 		ReplyMarkup: buildDNSAccountsKeyboard(accounts),
 	})
 }

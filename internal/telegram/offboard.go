@@ -25,10 +25,10 @@ func (h *Handler) handleOffboard(ctx context.Context, b *tgbot.Bot, msg *models.
 
 	sent, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
 		ChatID: msg.Chat.ID,
-		Text:   "Enter the Telegram username to offboard (with or without @):",
+		Text:   h.trans.Person.OffboardUsername,
 		ReplyMarkup: &models.InlineKeyboardMarkup{
 			InlineKeyboard: [][]models.InlineKeyboardButton{
-				{{Text: "Cancel", CallbackData: "cancel"}},
+				{{Text: h.trans.Admin.Cancel, CallbackData: "cancel"}},
 			},
 		},
 	})
@@ -62,7 +62,7 @@ func (h *Handler) handleOffboardPending(ctx context.Context, b *tgbot.Bot, msg *
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      "Error looking up user. Please try again.",
+			Text:      h.trans.User.LookupFailed,
 		})
 		h.mu.Lock()
 		delete(h.states, key)
@@ -73,7 +73,7 @@ func (h *Handler) handleOffboardPending(ctx context.Context, b *tgbot.Bot, msg *
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("User @%s not found in bot database. They may not have interacted with the bot.", username),
+			Text:      fmt.Sprintf(h.trans.Admin.UserNotInDatabase, username),
 		})
 		h.mu.Lock()
 		delete(h.states, key)
@@ -87,7 +87,7 @@ func (h *Handler) handleOffboardPending(ctx context.Context, b *tgbot.Bot, msg *
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      "Error listing groups. Please try again.",
+			Text:      h.trans.Admin.ListingGroupsFailed,
 		})
 		h.mu.Lock()
 		delete(h.states, key)
@@ -121,7 +121,7 @@ func (h *Handler) handleOffboardPending(ctx context.Context, b *tgbot.Bot, msg *
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("@%s is not a member of any bot-managed groups.", username),
+			Text:      fmt.Sprintf(h.trans.Admin.NotMemberOfGroups, username),
 		})
 		h.mu.Lock()
 		delete(h.states, key)
@@ -148,15 +148,15 @@ func (h *Handler) handleOffboardPending(ctx context.Context, b *tgbot.Bot, msg *
 		}})
 	}
 	rows = append(rows, []models.InlineKeyboardButton{{
-		Text:         "Remove from all groups",
+		Text:         h.trans.Person.RemovePerson,
 		CallbackData: fmt.Sprintf("offbrd_all:%d", userID),
 	}})
-	rows = append(rows, []models.InlineKeyboardButton{{Text: "Cancel", CallbackData: "cancel"}})
+	rows = append(rows, []models.InlineKeyboardButton{{Text: h.trans.Admin.Cancel, CallbackData: "cancel"}})
 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      admin.ChatID,
 		MessageID:   admin.MessageID,
-		Text:        fmt.Sprintf("@%s is in %d group(s). Select a group to remove them from:", username, len(found)),
+		Text:        fmt.Sprintf("@%s - %d %s", username, len(found), h.trans.Admin.SelectGroup),
 		ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows},
 	})
 }
@@ -237,15 +237,15 @@ func (h *Handler) handleOffboardGroupCallback(ctx context.Context, b *tgbot.Bot,
 		}})
 	}
 	rows = append(rows, []models.InlineKeyboardButton{{
-		Text:         "Remove from all groups",
+		Text:         h.trans.Person.RemovePerson,
 		CallbackData: fmt.Sprintf("offbrd_all:%d", targetUserID),
 	}})
-	rows = append(rows, []models.InlineKeyboardButton{{Text: "Cancel", CallbackData: "cancel"}})
+	rows = append(rows, []models.InlineKeyboardButton{{Text: h.trans.Admin.Cancel, CallbackData: "cancel"}})
 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      admin.ChatID,
 		MessageID:   admin.MessageID,
-		Text:        fmt.Sprintf("Removed @%s from %s. %d group(s) remaining:", admin.OffboardUsername, groupName, len(remaining)),
+		Text:        fmt.Sprintf("✓ @%s — %s. %d %s:", admin.OffboardUsername, groupName, len(remaining), h.trans.Admin.SelectGroup),
 		ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows},
 	})
 }

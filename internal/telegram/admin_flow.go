@@ -62,7 +62,7 @@ func (h *Handler) handleAdminAddCategoryPending(ctx context.Context, b *tgbot.Bo
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      h.catProgressText(admin) + "\n\n😀 Enter emoji:",
+			Text:      h.catProgressText(admin) + "\n\n" + h.trans.Category.EnterEmoji,
 		})
 
 	case StepAdminCatEmoji:
@@ -75,7 +75,7 @@ func (h *Handler) handleAdminAddCategoryPending(ctx context.Context, b *tgbot.Bo
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      h.catProgressText(admin) + "\n\n⌨️ Enter Linear team key (e.g., INFRA):",
+			Text:      h.catProgressText(admin) + "\n\n" + h.trans.Category.EnterLinearTeamKey,
 		})
 
 	case StepAdminCatTeamKey:
@@ -226,7 +226,7 @@ func (h *Handler) handleAdminTypeSelectCallback(ctx context.Context, b *tgbot.Bo
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✓ Category: %s\n\n📝 Enter new request type name:", admin.CategoryName),
+			Text:      fmt.Sprintf("✓ %s\n\n%s", admin.CategoryName, h.trans.Category.EnterNewRequestTypeName),
 		})
 		return
 	}
@@ -238,7 +238,7 @@ func (h *Handler) handleAdminTypeSelectCallback(ctx context.Context, b *tgbot.Bo
 		return
 	}
 
-	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID, Text: "Linking..."})
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID, Text: h.trans.Common.Loading})
 
 	if err := h.storage.LinkRequestTypeToCategory(ctx, admin.CategoryID, typeID); err != nil {
 		log.Printf("❌ Failed to link type to category: %v", err)
@@ -389,7 +389,7 @@ func (h *Handler) finalizeAddPerson(ctx context.Context, b *tgbot.Bot, admin *pe
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    admin.ChatID,
 				MessageID: admin.MessageID,
-				Text:      fmt.Sprintf("❌ Invalid work hours format: %v", err),
+				Text:      fmt.Sprintf(h.trans.Error.InvalidWorkHours, err),
 			})
 			return
 		}
@@ -399,7 +399,7 @@ func (h *Handler) finalizeAddPerson(ctx context.Context, b *tgbot.Bot, admin *pe
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    admin.ChatID,
 				MessageID: admin.MessageID,
-				Text:      fmt.Sprintf("❌ Invalid work days format: %v", err),
+				Text:      fmt.Sprintf(h.trans.Error.InvalidWorkDays, err),
 			})
 			return
 		}
@@ -409,7 +409,7 @@ func (h *Handler) finalizeAddPerson(ctx context.Context, b *tgbot.Bot, admin *pe
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    admin.ChatID,
 				MessageID: admin.MessageID,
-				Text:      fmt.Sprintf("❌ Invalid timezone format: %v", err),
+				Text:      fmt.Sprintf(h.trans.Error.InvalidTimezone, err),
 			})
 			return
 		}
@@ -421,7 +421,7 @@ func (h *Handler) finalizeAddPerson(ctx context.Context, b *tgbot.Bot, admin *pe
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("❌ Failed to add person: %v", err),
+			Text:      fmt.Sprintf(h.trans.Person.FailedToAdd, err),
 		})
 		return
 	}
@@ -432,7 +432,7 @@ func (h *Handler) finalizeAddPerson(ctx context.Context, b *tgbot.Bot, admin *pe
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("❌ Failed to create assignment: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.FailedCreateAssignment, err),
 		})
 		return
 	}
@@ -455,9 +455,7 @@ func (h *Handler) finalizeAddPerson(ctx context.Context, b *tgbot.Bot, admin *pe
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    admin.ChatID,
 		MessageID: admin.MessageID,
-		Text: fmt.Sprintf("✅ Support person added!\n\n👤 %s (@%s)\n🔷 Linear: @%s\n🌍 TZ: %s\n⏰ Hours: %s\n📅 Days: %s\n\nAssigned to category: %s",
-			admin.PersonName, admin.TgUsername, admin.LinearUsername,
-			admin.Timezone, admin.WorkHours, daysDisplay, admin.CategoryName),
+		Text:      fmt.Sprintf(h.trans.Person.AddedSuccess, admin.PersonName, admin.TgUsername, admin.LinearUsername, admin.Timezone, admin.WorkHours, daysDisplay, admin.CategoryName),
 	})
 	log.Printf("✓ Support person added: %s (@%s), category: %s", admin.PersonName, admin.TgUsername, admin.CategoryName)
 }
@@ -467,7 +465,7 @@ func (h *Handler) finalizeSetWorkHours(ctx context.Context, b *tgbot.Bot, admin 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("❌ Invalid work hours format: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.InvalidWorkHours, err),
 		})
 		return
 	}
@@ -475,7 +473,7 @@ func (h *Handler) finalizeSetWorkHours(ctx context.Context, b *tgbot.Bot, admin 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("❌ Invalid work days format: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.InvalidWorkDays, err),
 		})
 		return
 	}
@@ -483,7 +481,7 @@ func (h *Handler) finalizeSetWorkHours(ctx context.Context, b *tgbot.Bot, admin 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("❌ Invalid timezone format: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.InvalidTimezone, err),
 		})
 		return
 	}
@@ -493,7 +491,7 @@ func (h *Handler) finalizeSetWorkHours(ctx context.Context, b *tgbot.Bot, admin 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("❌ Failed to set work hours: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.Failed, err),
 		})
 		return
 	}
@@ -505,7 +503,7 @@ func (h *Handler) finalizeSetWorkHours(ctx context.Context, b *tgbot.Bot, admin 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    admin.ChatID,
 		MessageID: admin.MessageID,
-		Text:      fmt.Sprintf("✅ Work hours updated!\n\n🌍 Timezone: %s\n⏰ Hours: %s\n📅 Days: %s", admin.Timezone, admin.WorkHours, admin.WorkDays),
+		Text:      fmt.Sprintf(h.trans.Person.WorkHoursUpdated, admin.Timezone, admin.WorkHours, admin.WorkDays),
 	})
 	log.Printf("✓ Admin updated work hours for @%s", admin.TgUsername)
 }
@@ -625,7 +623,7 @@ func (h *Handler) handleAdminAddPersonPending(ctx context.Context, b *tgbot.Bot,
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✓ Name: %s\n\n📱 Enter Telegram username (@...):", admin.PersonName),
+			Text:      fmt.Sprintf("✓ %s\n\n%s", admin.PersonName, h.trans.Person.EnterTelegramUsername),
 		})
 
 	case StepAdminPersonTelegram:
@@ -639,7 +637,7 @@ func (h *Handler) handleAdminAddPersonPending(ctx context.Context, b *tgbot.Bot,
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✓ Name: %s\n✓ Telegram: @%s\n\n🔷 Enter Linear username (@...):", admin.PersonName, admin.TgUsername),
+			Text:      fmt.Sprintf("✓ %s\n✓ %s: @%s\n\n%s", admin.PersonName, h.trans.Common.Updated, admin.TgUsername, h.trans.Person.EnterLinearUsername),
 		})
 
 	case StepAdminPersonLinear:
@@ -781,7 +779,7 @@ func (h *Handler) handleAdminCategoryCallback(ctx context.Context, b *tgbot.Bot,
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    admin.ChatID,
 				MessageID: admin.MessageID,
-				Text:      fmt.Sprintf("❌ Failed to add to category: %v", err),
+				Text:      fmt.Sprintf(h.trans.Error.FailedAddToCategory, err),
 			})
 		} else {
 			// Seed the rotation schedule if needed (no-op for an existing one).
@@ -809,11 +807,11 @@ func (h *Handler) handleAdminCategoryCallback(ctx context.Context, b *tgbot.Bot,
 func (h *Handler) startAdminCategoryPicker(ctx context.Context, b *tgbot.Bot, msg *models.Message, cmd AdminCmd) {
 	categories, err := h.storage.ListCategories(ctx)
 	if err != nil {
-		h.sendMessage(ctx, b, msg, fmt.Sprintf("❌ Failed to load categories: %v", err))
+		h.sendMessage(ctx, b, msg, fmt.Sprintf(h.trans.Error.FailedLoadCategories, err))
 		return
 	}
 	if len(categories) == 0 {
-		h.sendMessage(ctx, b, msg, "❌ No categories yet. Create one with /addcategory")
+		h.sendMessage(ctx, b, msg, h.trans.Category.NoCategories)
 		return
 	}
 
@@ -900,7 +898,7 @@ func (h *Handler) buildAdminCatTopKeyboard(categories []storage.Category) *model
 		}
 	}
 
-	rows = append(rows, []models.InlineKeyboardButton{{Text: "❌ Cancel", CallbackData: "cancel"}})
+	rows = append(rows, []models.InlineKeyboardButton{{Text: h.trans.Admin.Cancel, CallbackData: "cancel"}})
 	return &models.InlineKeyboardMarkup{InlineKeyboard: rows}
 }
 
@@ -938,7 +936,7 @@ func (h *Handler) buildAdminCatGroupKeyboard(chatID int64, categories []storage.
 
 	rows = append(rows, []models.InlineKeyboardButton{
 		{Text: "⬅️ Back", CallbackData: "acat_back"},
-		{Text: "❌ Cancel", CallbackData: "cancel"},
+		{Text: h.trans.Admin.Cancel, CallbackData: "cancel"},
 	})
 	return &models.InlineKeyboardMarkup{InlineKeyboard: rows}
 }
@@ -958,7 +956,7 @@ func (h *Handler) buildAdminCatTopicKeyboard(chatID int64, threadID int, categor
 
 	rows = append(rows, []models.InlineKeyboardButton{
 		{Text: "⬅️ Back", CallbackData: fmt.Sprintf("acat_grp:%d", chatID)},
-		{Text: "❌ Cancel", CallbackData: "cancel"},
+		{Text: h.trans.Admin.Cancel, CallbackData: "cancel"},
 	})
 	return &models.InlineKeyboardMarkup{InlineKeyboard: rows}
 }
@@ -1108,7 +1106,7 @@ func (h *Handler) handleAdminConfirmCallback(ctx context.Context, b *tgbot.Bot, 
 	if confirmType == "global" && adminPending.Step == StepAdminCatSelectTopic {
 		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
-			Text:            "✓ Global scope",
+			Text:            h.trans.Rotation.GlobalScope,
 		})
 		adminPending.ThreadID = 0
 		adminPending.Step = StepAdminCatName
@@ -1118,7 +1116,7 @@ func (h *Handler) handleAdminConfirmCallback(ctx context.Context, b *tgbot.Bot, 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    adminPending.ChatID,
 			MessageID: adminPending.MessageID,
-			Text:      h.catProgressText(adminPending) + "\n\n📝 Enter category name:",
+			Text:      h.catProgressText(adminPending) + "\n\n" + h.trans.Category.EnterName,
 		})
 	} else {
 		b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
@@ -1164,7 +1162,7 @@ func (h *Handler) handleAdminTopicManualCallback(ctx context.Context, b *tgbot.B
 
 	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
-		Text:            "✓ Topic selected",
+		Text:            h.trans.Rotation.TopicSelected,
 	})
 
 	adminPending.TargetGroupChatID = chatID
@@ -1181,7 +1179,7 @@ func (h *Handler) handleAdminTopicManualCallback(ctx context.Context, b *tgbot.B
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    adminPending.ChatID,
 		MessageID: adminPending.MessageID,
-		Text:      h.catProgressText(adminPending) + "\n\n📝 Enter category name:",
+		Text:      h.catProgressText(adminPending) + "\n\n" + h.trans.Category.EnterName,
 	})
 }
 
@@ -1204,7 +1202,7 @@ func (h *Handler) handleAdminRotationCallback(ctx context.Context, b *tgbot.Bot,
 
 	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
-		Text:            "✓ Setting rotation...",
+		Text:            h.trans.Rotation.SettingRotation,
 	})
 
 	// Set rotation
@@ -1213,7 +1211,7 @@ func (h *Handler) handleAdminRotationCallback(ctx context.Context, b *tgbot.Bot,
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    adminPending.ChatID,
 			MessageID: adminPending.MessageID,
-			Text:      fmt.Sprintf("❌ Failed to set rotation: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.FailedSetRotation, err),
 		})
 		return
 	}
@@ -1231,7 +1229,7 @@ func (h *Handler) handleAdminRotationCallback(ctx context.Context, b *tgbot.Bot,
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:    adminPending.ChatID,
 		MessageID: adminPending.MessageID,
-		Text:      fmt.Sprintf("✅ Rotation updated!\n\n%s %s → %s", rotationName, rotationType, adminPending.CategoryName),
+		Text:      fmt.Sprintf(h.trans.Category.RotationUpdated, rotationName, rotationType, adminPending.CategoryName),
 	})
 
 	log.Printf("✓ Admin set rotation for category %d to %s", adminPending.CategoryID, rotationType)
@@ -1272,7 +1270,7 @@ func (h *Handler) handleAdminPersonCallback(ctx context.Context, b *tgbot.Bot, u
 
 	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
-		Text:            "✓ Selected",
+		Text:            h.trans.Common.Selected,
 	})
 
 	// Move to timezone step
@@ -1308,7 +1306,7 @@ func (h *Handler) handleAdminTopicGroupCallback(ctx context.Context, b *tgbot.Bo
 
 	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
-		Text:            "✓ Group selected",
+		Text:            h.trans.Rotation.GroupSelected,
 	})
 
 	// Handle addcategory group selection (new flow)
@@ -1367,13 +1365,13 @@ func (h *Handler) handleAdminTopicGroupCallback(ctx context.Context, b *tgbot.Bo
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    adminPending.ChatID,
 				MessageID: adminPending.MessageID,
-				Text:      fmt.Sprintf("❌ Failed to set tag: %v", err),
+				Text:      fmt.Sprintf(h.trans.Error.Failed, err),
 			})
 		} else {
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    adminPending.ChatID,
 				MessageID: adminPending.MessageID,
-				Text:      fmt.Sprintf("✅ Tag *%s* set for @%s", adminPending.LabelText, adminPending.LabelUsername),
+				Text:      fmt.Sprintf(h.trans.Admin.TagSet, adminPending.LabelText, adminPending.LabelUsername),
 			})
 			log.Printf("✓ Tag set for user %d (@%s) in chat %d: %s", adminPending.LabelUserID, adminPending.LabelUsername, selectedChatID, adminPending.LabelText)
 		}
@@ -1440,7 +1438,7 @@ func (h *Handler) handleAdminAddTopicPending(ctx context.Context, b *tgbot.Bot, 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("✅ Topic registered!\n\nchat_id: %d\nthread_id: %d\nname: %s\n\nNow available in /addcategory", admin.SelectedChatID, topicID, admin.TopicName),
+			Text:      fmt.Sprintf(h.trans.Admin.TopicRegistered, admin.SelectedChatID, topicID, admin.TopicName),
 		})
 
 		log.Printf("✓ Topic #%d registered for chat %d: %s", topicID, admin.SelectedChatID, admin.TopicName)
@@ -1490,7 +1488,7 @@ func (h *Handler) handleAdminSetLabelPending(ctx context.Context, b *tgbot.Bot, 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      "❌ Label must be 1–16 characters.",
+			Text:      h.trans.Admin.LabelTooLong,
 		})
 		return
 	}
@@ -1500,7 +1498,7 @@ func (h *Handler) handleAdminSetLabelPending(ctx context.Context, b *tgbot.Bot, 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      fmt.Sprintf("❌ Failed to load groups: %v", err),
+			Text:      fmt.Sprintf(h.trans.Error.FailedLoadGroups, err),
 		})
 		return
 	}
@@ -1514,7 +1512,7 @@ func (h *Handler) handleAdminSetLabelPending(ctx context.Context, b *tgbot.Bot, 
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    admin.ChatID,
 			MessageID: admin.MessageID,
-			Text:      "❌ No approved groups yet. Approve groups via /groups first.",
+			Text:      h.trans.Category.NoApprovedGroups,
 		})
 		h.mu.Lock()
 		delete(h.states, stateKey{UserID: admin.UserID})
@@ -1531,7 +1529,7 @@ func (h *Handler) handleAdminSetLabelPending(ctx context.Context, b *tgbot.Bot, 
 	_, err = b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 		ChatID:      admin.ChatID,
 		MessageID:   admin.MessageID,
-		Text:        fmt.Sprintf("✓ Label: %s\n\n🏘 Select the group:", label),
+		Text:        fmt.Sprintf("✓ %s\n\n%s", label, h.trans.Admin.SelectGroup),
 		ReplyMarkup: buildGroupKeyboard(approvedGroups),
 	})
 	if err != nil {

@@ -31,14 +31,14 @@ func (h *Handler) showPersonsList(ctx context.Context, b *tgbot.Bot, chatID int6
 		}})
 	}
 	rows = append(rows, []models.InlineKeyboardButton{{
-		Text:         "➕ Add person",
+		Text:         h.trans.Person.AddPerson,
 		CallbackData: "pmgr:addperson",
 	}})
 	kb := &models.InlineKeyboardMarkup{InlineKeyboard: rows}
 
-	text := "Support persons:"
+	text := h.trans.Person.SelectPerson
 	if len(persons) == 0 {
-		text = "No support persons yet."
+		text = h.trans.Person.NoPersonsYet
 	}
 	if messageID != 0 {
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
@@ -73,9 +73,9 @@ func (h *Handler) showPersonDetail(ctx context.Context, b *tgbot.Bot, chatID int
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    chatID,
 			MessageID: messageID,
-			Text:      "Person not found.",
+			Text:      h.trans.Person.PersonNotFound,
 			ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: [][]models.InlineKeyboardButton{
-				{{Text: "⬅️ Back", CallbackData: "pmgr:list"}},
+				{{Text: h.trans.Admin.Back, CallbackData: "pmgr:list"}},
 			}},
 		})
 		return
@@ -106,7 +106,7 @@ func (h *Handler) showPersonDetail(ctx context.Context, b *tgbot.Bot, chatID int
 	sb.WriteString(fmt.Sprintf("🌍 %s  ⏰ %s  📅 %s\n", tz, hours, days))
 
 	if len(cats) == 0 {
-		sb.WriteString("\nNot assigned to any category.")
+		sb.WriteString("\n(no categories)")
 	} else {
 		sb.WriteString("\nAssigned to:")
 		for _, c := range cats {
@@ -117,24 +117,24 @@ func (h *Handler) showPersonDetail(ctx context.Context, b *tgbot.Bot, chatID int
 	rows := make([][]models.InlineKeyboardButton, 0, len(cats)+4)
 	for _, c := range cats {
 		rows = append(rows, []models.InlineKeyboardButton{{
-			Text:         fmt.Sprintf("🚫 Remove from %s %s", c.Emoji, c.Name),
+			Text:         fmt.Sprintf(h.trans.Person.RemovePerson, c.Emoji, c.Name),
 			CallbackData: fmt.Sprintf("pmgr:rmcat:%d:%d", personID, c.ID),
 		}})
 	}
 	rows = append(rows,
 		[]models.InlineKeyboardButton{{
-			Text:         "➕ Add to category",
+			Text:         h.trans.Person.AddPerson,
 			CallbackData: fmt.Sprintf("pmgr:addtocat:%d", personID),
 		}},
 		[]models.InlineKeyboardButton{{
-			Text:         "✏️ Edit schedule",
+			Text:         h.trans.Person.EditSchedule,
 			CallbackData: fmt.Sprintf("pmgr:editsch:%d", personID),
 		}},
 		[]models.InlineKeyboardButton{{
-			Text:         "🗑 Delete person",
+			Text:         h.trans.Person.DeletePerson,
 			CallbackData: fmt.Sprintf("pmgr:del:%d", personID),
 		}},
-		[]models.InlineKeyboardButton{{Text: "⬅️ Back", CallbackData: "pmgr:list"}},
+		[]models.InlineKeyboardButton{{Text: h.trans.Admin.Back, CallbackData: "pmgr:list"}},
 	)
 
 	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
@@ -237,7 +237,7 @@ func (h *Handler) handlePersonsCallback(ctx context.Context, b *tgbot.Bot, updat
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    chatID,
 				MessageID: messageID,
-				Text:      fmt.Sprintf("❌ Failed to remove: %v", err),
+				Text:      fmt.Sprintf(h.trans.Error.FailedRemove, err),
 			})
 			return
 		}
@@ -251,11 +251,11 @@ func (h *Handler) handlePersonsCallback(ctx context.Context, b *tgbot.Bot, updat
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    chatID,
 			MessageID: messageID,
-			Text:      "Delete this person? They will be removed from all categories permanently.",
+			Text:      h.trans.Person.ConfirmDelete,
 			ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: [][]models.InlineKeyboardButton{
 				{
-					{Text: "✓ Confirm delete", CallbackData: fmt.Sprintf("pmgr:delconf:%d", personID)},
-					{Text: "✗ Cancel", CallbackData: fmt.Sprintf("pmgr:view:%d", personID)},
+					{Text: h.trans.Admin.Confirm, CallbackData: fmt.Sprintf("pmgr:delconf:%d", personID)},
+					{Text: h.trans.Admin.Cancel, CallbackData: fmt.Sprintf("pmgr:view:%d", personID)},
 				},
 			}},
 		})
@@ -270,7 +270,7 @@ func (h *Handler) handlePersonsCallback(ctx context.Context, b *tgbot.Bot, updat
 			b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 				ChatID:    chatID,
 				MessageID: messageID,
-				Text:      fmt.Sprintf("❌ Failed to delete: %v", err),
+				Text:      fmt.Sprintf(h.trans.Error.FailedDelete, err),
 			})
 			return
 		}
