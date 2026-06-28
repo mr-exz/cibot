@@ -732,6 +732,7 @@ type GroupChat struct {
 	Approved bool
 	AddedAt  string
 	Timezone string
+	IsForum  bool
 }
 
 // RegisterGroup adds a group to the database if not already present (unapproved by default).
@@ -763,6 +764,16 @@ func (d *DB) IsGroupApproved(ctx context.Context, chatID int64) (bool, error) {
 	return approved == 1, err
 }
 
+// IsGroupForum returns whether a group is a forum group (supports topics).
+func (d *DB) IsGroupForum(ctx context.Context, chatID int64) (bool, error) {
+	var isForum int
+	err := d.db.QueryRowContext(ctx, "SELECT is_forum FROM group_chats WHERE chat_id = ?", chatID).Scan(&isForum)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return isForum == 1, err
+}
+
 // ListApprovedGroupIDs returns the chat IDs of all approved groups.
 func (d *DB) ListApprovedGroupIDs(ctx context.Context) ([]int64, error) {
 	rows, err := d.db.QueryContext(ctx, "SELECT chat_id FROM group_chats WHERE approved = 1")
@@ -784,7 +795,7 @@ func (d *DB) ListApprovedGroupIDs(ctx context.Context) ([]int64, error) {
 // ListGroups returns all known groups ordered by approved desc, added_at asc.
 func (d *DB) ListGroups(ctx context.Context) ([]GroupChat, error) {
 	rows, err := d.db.QueryContext(ctx,
-		"SELECT chat_id, title, approved, added_at, timezone FROM group_chats ORDER BY approved DESC, added_at ASC")
+		"SELECT chat_id, title, approved, added_at, timezone, is_forum FROM group_chats ORDER BY approved DESC, added_at ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -793,11 +804,12 @@ func (d *DB) ListGroups(ctx context.Context) ([]GroupChat, error) {
 	var groups []GroupChat
 	for rows.Next() {
 		var g GroupChat
-		var approved int
-		if err := rows.Scan(&g.ChatID, &g.Title, &approved, &g.AddedAt, &g.Timezone); err != nil {
+		var approved, isForum int
+		if err := rows.Scan(&g.ChatID, &g.Title, &approved, &g.AddedAt, &g.Timezone, &isForum); err != nil {
 			return nil, err
 		}
 		g.Approved = approved == 1
+		g.IsForum = isForum == 1
 		groups = append(groups, g)
 	}
 	return groups, rows.Err()
@@ -816,6 +828,15 @@ func (d *DB) GetGroupTimezone(ctx context.Context, chatID int64) (string, error)
 // SetGroupTimezone sets the timezone for a group.
 func (d *DB) SetGroupTimezone(ctx context.Context, chatID int64, tz string) error {
 	_, err := d.db.ExecContext(ctx, "UPDATE group_chats SET timezone = ? WHERE chat_id = ?", tz, chatID)
+	return err
+}
+
+func (d *DB) SetGroupIsForum(ctx context.Context, chatID int64, isForum bool) error {
+	v := 0
+	if isForum {
+		v = 1
+	}
+	_, err := d.db.ExecContext(ctx, "UPDATE group_chats SET is_forum = ? WHERE chat_id = ?", v, chatID)
 	return err
 }
 

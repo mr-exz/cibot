@@ -135,6 +135,7 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "approve:", tgbot.MatchTypePrefix, h.handleGroupApproveCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "disapprove:", tgbot.MatchTypePrefix, h.handleGroupApproveCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "grptz:", tgbot.MatchTypePrefix, h.handleGroupTZCallback)
+	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "grptype:", tgbot.MatchTypePrefix, h.handleGroupTypeCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "skip", tgbot.MatchTypeExact, h.handleAdminSkipCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "confirm:", tgbot.MatchTypePrefix, h.handleAdminConfirmCallback)
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "topic:", tgbot.MatchTypePrefix, h.handleAdminTopicManualCallback)
@@ -260,6 +261,12 @@ func (h *Handler) handleMessage(ctx context.Context, b *tgbot.Bot, update *model
 			if changed {
 				if err := h.storage.RegisterGroup(ctx, msg.Chat.ID, msg.Chat.Title); err != nil {
 					log.Printf("⚠️  Failed to register group %d: %v", msg.Chat.ID, err)
+				}
+				// Detect and store if group is a forum
+				if msg.Chat.IsForum {
+					if err := h.storage.SetGroupIsForum(ctx, msg.Chat.ID, true); err != nil {
+						log.Printf("⚠️ Failed to set is_forum for group %d: %v", msg.Chat.ID, err)
+					}
 				}
 			}
 		}

@@ -57,7 +57,11 @@ func (h *Handler) sendGroupsList(ctx context.Context, b *tgbot.Bot, chatID int64
 		if tz == "" {
 			tz = "UTC"
 		}
-		sb.WriteString(fmt.Sprintf("\n%s %s (TZ: %s)\n", status, title, tz))
+		groupType := "💬 Regular"
+		if g.IsForum {
+			groupType = "📋 Forum"
+		}
+		sb.WriteString(fmt.Sprintf("\n%s %s (TZ: %s, %s)\n", status, title, tz, groupType))
 
 		var actionBtn models.InlineKeyboardButton
 		if g.Approved {
@@ -75,7 +79,11 @@ func (h *Handler) sendGroupsList(ctx context.Context, b *tgbot.Bot, chatID int64
 			Text:         "🕐 Set TZ",
 			CallbackData: fmt.Sprintf("grptz:sel:%d", g.ChatID),
 		}
-		rows = append(rows, []models.InlineKeyboardButton{actionBtn, tzBtn})
+		typeBtn := models.InlineKeyboardButton{
+			Text:         "🔀 Toggle Type",
+			CallbackData: fmt.Sprintf("grptype:toggle:%d", g.ChatID),
+		}
+		rows = append(rows, []models.InlineKeyboardButton{actionBtn, tzBtn, typeBtn})
 	}
 
 	keyboard := &models.InlineKeyboardMarkup{InlineKeyboard: rows}
@@ -119,6 +127,38 @@ func (h *Handler) handleGroupApproveCallback(ctx context.Context, b *tgbot.Bot, 
 		action = "disapproved"
 	}
 	log.Printf("✓ Group %d %s by @%s", chatID, action, query.From.Username)
+
+	msg := query.Message.Message
+	h.sendGroupsList(ctx, b, msg.Chat.ID, msg.ID)
+}
+
+// handleGroupTypeCallback handles grptype: callbacks for toggling whether a group
+// is a forum (supports topics) or a regular group.
+// grptype:toggle:{chatID} — flip the is_forum flag and refresh the groups list.
+func (h *Handler) handleGroupTypeCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	chatIDStr := strings.TrimPrefix(query.Data, "grptype:toggle:")
+	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+	if err != nil {
+		return
+	}
+
+	current, err := h.storage.IsGroupForum(ctx, chatID)
+	if err != nil {
+		log.Printf("❌ IsGroupForum %d: %v", chatID, err)
+		return
+	}
+
+	if err := h.storage.SetGroupIsForum(ctx, chatID, !current); err != nil {
+		log.Printf("❌ SetGroupIsForum %d: %v", chatID, err)
+		return
+	}
+	log.Printf("✓ Group %d type toggled to is_forum=%v by @%s", chatID, !current, query.From.Username)
 
 	msg := query.Message.Message
 	h.sendGroupsList(ctx, b, msg.Chat.ID, msg.ID)

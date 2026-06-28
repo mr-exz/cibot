@@ -2,7 +2,15 @@
 
 ## [0.0.96]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- **Group type tracking**: Groups now store whether they are forum groups (support topics) or regular groups. The `group_chats` table gains an `is_forum` column, auto-detected from the Telegram API on a group's first message.
+- Admin `/groups` menu: each group now displays its type (`📋 Forum` / `💬 Regular`) and has a `🔀 Toggle Type` button to manually correct or override the detected type (useful for groups added before auto-detection existed).
+
+### Changed
+- `/ticket` and `/ticket_manual` "no categories" message is now type-aware: regular groups get a hint to use `/ticket_manual`, while forum groups list their configured topics. Detection now relies on the stored `is_forum` flag instead of inferring from message thread IDs.
+
+### Fixed
+- `/status` no longer floods logs when adding users to rotation: `setTagInAllGroups` now silently skips groups where the user is not a member, the bot lacks permission, or the group no longer exists, and prints a single summary line (success / skipped / failed counts) instead of one warning per group.
 
 
 ## [0.0.95]

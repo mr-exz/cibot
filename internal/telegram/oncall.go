@@ -313,11 +313,32 @@ func (h *Handler) setTagInAllGroups(ctx context.Context, userID int64, username 
 		log.Printf("❌ setTagInAllGroups ListApprovedGroupIDs: %v", err)
 		return
 	}
+
+	skipped := 0
+	success := 0
+	failed := 0
+
 	for _, groupID := range groupIDs {
 		if err := setChatMemberTag(ctx, h.cfg.TelegramToken, groupID, userID, tag); err != nil {
+			errStr := err.Error()
+			// Silently skip expected errors: user not in group, bot lacks permission, group doesn't exist
+			if strings.Contains(errStr, "USER_NOT_PARTICIPANT") ||
+				strings.Contains(errStr, "CHAT_CREATOR_REQUIRED") ||
+				strings.Contains(errStr, "chat not found") ||
+				strings.Contains(errStr, "upgraded to a supergroup") {
+				skipped++
+				continue
+			}
+			// Log unexpected errors only
+			failed++
 			log.Printf("⚠️ setChatMemberTag group %d for @%s: %v", groupID, username, err)
+		} else {
+			success++
 		}
 	}
+
+	log.Printf("✓ setTagInAllGroups for @%s: %d total, %d success, %d skipped (user not member/bot no permission), %d failed",
+		username, len(groupIDs), success, skipped, failed)
 }
 
 func buildStatusKeyboard() *models.InlineKeyboardMarkup {

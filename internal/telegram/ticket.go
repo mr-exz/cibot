@@ -65,7 +65,7 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		if msg.Chat.Type == "private" {
 			h.sendMessage(ctx, b, msg, h.trans.Ticket.MustBeInGroup)
 		} else {
-			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID, msg.MessageThreadID))
+			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID))
 		}
 		return
 	}
@@ -141,29 +141,20 @@ func (h *Handler) handleCancelCallback(ctx context.Context, b *tgbot.Bot, update
 }
 
 // buildUnconfiguredTopicMsg returns a message for when /ticket is used in a group with no categories.
-// If the group has topics, it lists topics with categories. Otherwise, it says support is not configured.
-func (h *Handler) buildUnconfiguredTopicMsg(ctx context.Context, chatID int64, messageThreadID int) string {
-	// messageThreadID > 0 means this is a topic group; == 0 means it's a regular group
-	hasTopics := messageThreadID > 0
-
-	topics, err := h.storage.ListConfiguredTopicsForChat(ctx, chatID)
+// For forum groups, lists topics with categories. For regular groups, suggests /ticket_manual.
+func (h *Handler) buildUnconfiguredTopicMsg(ctx context.Context, chatID int64) string {
+	isForum, err := h.storage.IsGroupForum(ctx, chatID)
 	if err != nil {
 		return h.trans.Thread.NoCategories
 	}
 
-	if len(topics) == 0 {
-		if hasTopics {
-			return h.trans.Thread.NoCategories
-		}
-		return h.trans.Thread.NoCategories
+	if !isForum {
+		return h.trans.Thread.NoCategories + "\n\nUse /ticket_manual to create a ticket without replying to a message."
 	}
 
-	if hasTopics {
-		msg := h.trans.Thread.NoCategories + "\n\nYou can use /ticket in:"
-		for _, t := range topics {
-			msg += "\n• " + t
-		}
-		return msg
+	topics, err := h.storage.ListConfiguredTopicsForChat(ctx, chatID)
+	if err != nil || len(topics) == 0 {
+		return h.trans.Thread.NoCategories
 	}
 
 	msg := h.trans.Thread.NoCategories + "\n\nYou can use /ticket in:"
@@ -171,7 +162,6 @@ func (h *Handler) buildUnconfiguredTopicMsg(ctx context.Context, chatID int64, m
 		msg += "\n• " + t
 	}
 	return msg
-
 }
 
 // uploadTicketMedia downloads each media file from Telegram, uploads it to Linear, and returns

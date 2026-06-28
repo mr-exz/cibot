@@ -27,7 +27,7 @@ func (h *Handler) handleSupportStart(ctx context.Context, b *tgbot.Bot, msg *mod
 		if msg.Chat.Type == "private" {
 			h.sendMessage(ctx, b, msg, h.trans.Ticket.MustBeInGroup)
 		} else {
-			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID, msg.MessageThreadID))
+			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID))
 		}
 		return
 	}
