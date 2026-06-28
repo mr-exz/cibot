@@ -37,6 +37,7 @@ type Handler struct {
 	knownUsers          map[int64]string         // user_id -> "username\x00first\x00last" fingerprint; skip DB write if unchanged
 	techThreads         map[string]*activeThread // "chatID:threadID" -> open thread
 	techGroupInviteLink string                   // cached permanent invite link for the tech group
+	botID               int64                    // the bot's own Telegram user ID (from GetMe)
 	cmdRegistry         []commandDef
 	cmdHandlers         map[string]cmdHandler
 	dns                 *pskzdns.Client        // experimental DNS management
@@ -175,11 +176,40 @@ func New(ctx context.Context, linearClient *linear.Client, db *storage.DB, cfg *
 	// takeover callbacks
 	b.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "takeover:", tgbot.MatchTypePrefix, h.handleTakeoverCallback)
 
+	// Cache the bot's own user ID so we can check whether it is an admin in a group.
+	if me, err := b.GetMe(ctx); err != nil {
+		log.Printf("⚠️  GetMe failed, bot admin checks disabled: %v", err)
+	} else {
+		h.botID = me.ID
+	}
+
 	go h.sessionReaper(ctx)
 	go h.startReminderScheduler(ctx, b)
 	go h.startRotationScheduler(ctx)
 
 	return b, nil
+}
+
+// botIsAdmin reports whether the bot is an administrator (or creator) in the given chat.
+// Used to detect when Privacy Mode is likely stripping reply_to_message from updates:
+// a non-admin bot in privacy mode does not receive the replied-to message for replies to
+// other users' messages. Returns true if the status can't be determined (fail open) so we
+// never show a misleading admin-rights hint on a transient API error.
+func (h *Handler) botIsAdmin(ctx context.Context, b *tgbot.Bot, chatID int64) bool {
+	if h.botID == 0 {
+		return true
+	}
+	member, err := b.GetChatMember(ctx, &tgbot.GetChatMemberParams{ChatID: chatID, UserID: h.botID})
+	if err != nil {
+		log.Printf("⚠️  botIsAdmin GetChatMember chat %d: %v", chatID, err)
+		return true
+	}
+	switch member.Type {
+	case models.ChatMemberTypeOwner, models.ChatMemberTypeAdministrator:
+		return true
+	default:
+		return false
+	}
 }
 
 // sessionReaper runs in the background and removes sessions that have been

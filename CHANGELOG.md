@@ -2,7 +2,8 @@
 
 ## [0.0.99]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- **Clearer `/thread` and `/ticket` error when the bot lacks admin rights.** If the command arrives with no reply attached in a group and the bot is *not* an administrator there, it now explains that it needs admin rights to read replies (Privacy Mode strips the replied-to message for non-admin bots) instead of the generic "reply required" message. The bot's own ID is fetched once via `GetMe` on startup and used for the membership check; the check fails open, so a transient API error never shows a misleading hint.
 
 
 ## [0.0.98]

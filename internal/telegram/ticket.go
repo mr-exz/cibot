@@ -17,6 +17,12 @@ import (
 // message — that message is used as the ticket source. Returns an error otherwise.
 func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	if msg.ReplyToMessage == nil {
+		// In a group, a missing reply may mean the user really didn't reply, OR that the bot
+		// isn't an admin and Privacy Mode stripped the replied-to message. Disambiguate.
+		if string(msg.Chat.Type) != "private" && !h.botIsAdmin(ctx, b, msg.Chat.ID) {
+			h.sendMessage(ctx, b, msg, h.trans.Ticket.ReplyRequiredNoAdmin)
+			return
+		}
 		h.sendMessage(ctx, b, msg, h.trans.Ticket.ReplyRequired)
 		return
 	}

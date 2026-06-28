@@ -46,6 +46,7 @@ type ThreadMessages struct {
 	UploadComplete               string `yaml:"uploadComplete"`
 	UploadCompleteWithFiles      string `yaml:"uploadCompleteWithFiles"`
 	ReplyRequired                string `yaml:"replyRequired"`
+	ReplyRequiredNoAdmin         string `yaml:"replyRequiredNoAdmin"`
 	ReplyToUserMessage           string `yaml:"replyToUserMessage"`
 	NoCategories                 string `yaml:"noCategories"`
 	NotInTechTopic               string `yaml:"notInTechTopic"`
@@ -65,6 +66,7 @@ type TicketMessages struct {
 	SelectCategory            string `yaml:"selectCategory"`
 	CreatedSuccess            string `yaml:"createdSuccess"`
 	ReplyRequired             string `yaml:"replyRequired"`
+	ReplyRequiredNoAdmin      string `yaml:"replyRequiredNoAdmin"`
 	ReplyToUserMessage        string `yaml:"replyToUserMessage"`
 	MustBeInGroup             string `yaml:"mustBeInGroup"`
 	DescribeIssue             string `yaml:"describeIssue"`
