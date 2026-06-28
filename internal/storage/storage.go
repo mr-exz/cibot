@@ -774,6 +774,24 @@ func (d *DB) IsGroupForum(ctx context.Context, chatID int64) (bool, error) {
 	return isForum == 1, err
 }
 
+// GetGroup returns a single group by chat ID.
+func (d *DB) GetGroup(ctx context.Context, chatID int64) (*GroupChat, error) {
+	var g GroupChat
+	var approved, isForum int
+	err := d.db.QueryRowContext(ctx,
+		"SELECT chat_id, title, approved, added_at, timezone, is_forum FROM group_chats WHERE chat_id = ?",
+		chatID).Scan(&g.ChatID, &g.Title, &approved, &g.AddedAt, &g.Timezone, &isForum)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	g.Approved = approved == 1
+	g.IsForum = isForum == 1
+	return &g, nil
+}
+
 // ListApprovedGroupIDs returns the chat IDs of all approved groups.
 func (d *DB) ListApprovedGroupIDs(ctx context.Context) ([]int64, error) {
 	rows, err := d.db.QueryContext(ctx, "SELECT chat_id FROM group_chats WHERE approved = 1")

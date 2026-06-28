@@ -14,6 +14,8 @@ func (h *Handler) handleGroups(ctx context.Context, b *tgbot.Bot, msg *models.Me
 	h.sendGroupsList(ctx, b, msg.Chat.ID, 0)
 }
 
+// sendGroupsList renders the top-level groups list: a header with approved/pending
+// counts and one button per group. Selecting a group opens its detail view.
 func (h *Handler) sendGroupsList(ctx context.Context, b *tgbot.Bot, chatID int64, editMsgID int) {
 	groups, err := h.storage.ListGroups(ctx)
 	if err != nil {
@@ -40,10 +42,9 @@ func (h *Handler) sendGroupsList(ctx context.Context, b *tgbot.Bot, chatID int64
 		}
 	}
 
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf(h.trans.Group.RegisterGroups, approved, pending))
+	text := fmt.Sprintf(h.trans.Group.GroupsListHeader, approved, pending)
 
-	rows := make([][]models.InlineKeyboardButton, 0, len(groups)*2)
+	rows := make([][]models.InlineKeyboardButton, 0, len(groups))
 	for _, g := range groups {
 		title := g.Title
 		if title == "" {
@@ -53,37 +54,10 @@ func (h *Handler) sendGroupsList(ctx context.Context, b *tgbot.Bot, chatID int64
 		if g.Approved {
 			status = "✅"
 		}
-		tz := g.Timezone
-		if tz == "" {
-			tz = "UTC"
-		}
-		groupType := "💬 Regular"
-		if g.IsForum {
-			groupType = "📋 Forum"
-		}
-		sb.WriteString(fmt.Sprintf("\n%s %s (TZ: %s, %s)\n", status, title, tz, groupType))
-
-		var actionBtn models.InlineKeyboardButton
-		if g.Approved {
-			actionBtn = models.InlineKeyboardButton{
-				Text:         h.trans.Admin.RejectGroup,
-				CallbackData: fmt.Sprintf("disapprove:%d", g.ChatID),
-			}
-		} else {
-			actionBtn = models.InlineKeyboardButton{
-				Text:         fmt.Sprintf(h.trans.Admin.ApproveGroup, title),
-				CallbackData: fmt.Sprintf("approve:%d", g.ChatID),
-			}
-		}
-		tzBtn := models.InlineKeyboardButton{
-			Text:         "🕐 Set TZ",
-			CallbackData: fmt.Sprintf("grptz:sel:%d", g.ChatID),
-		}
-		typeBtn := models.InlineKeyboardButton{
-			Text:         "🔀 Toggle Type",
-			CallbackData: fmt.Sprintf("grptype:toggle:%d", g.ChatID),
-		}
-		rows = append(rows, []models.InlineKeyboardButton{actionBtn, tzBtn, typeBtn})
+		rows = append(rows, []models.InlineKeyboardButton{{
+			Text:         fmt.Sprintf("%s %s", status, title),
+			CallbackData: fmt.Sprintf("grpd:%d", g.ChatID),
+		}})
 	}
 
 	keyboard := &models.InlineKeyboardMarkup{InlineKeyboard: rows}
@@ -92,16 +66,105 @@ func (h *Handler) sendGroupsList(ctx context.Context, b *tgbot.Bot, chatID int64
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:      chatID,
 			MessageID:   editMsgID,
-			Text:        sb.String(),
+			Text:        text,
 			ReplyMarkup: keyboard,
 		})
 	} else {
 		b.SendMessage(ctx, &tgbot.SendMessageParams{
 			ChatID:      chatID,
-			Text:        sb.String(),
+			Text:        text,
 			ReplyMarkup: keyboard,
 		})
 	}
+}
+
+// showGroupDetail renders the detail/config view for a single group: its status,
+// timezone, and type, plus action buttons (approve/reject, set TZ, toggle type, back).
+func (h *Handler) showGroupDetail(ctx context.Context, b *tgbot.Bot, adminChatID int64, msgID int, groupChatID int64) {
+	g, err := h.storage.GetGroup(ctx, groupChatID)
+	if err != nil {
+		log.Printf("❌ GetGroup %d: %v", groupChatID, err)
+		return
+	}
+	if g == nil {
+		h.sendGroupsList(ctx, b, adminChatID, msgID)
+		return
+	}
+
+	title := g.Title
+	if title == "" {
+		title = fmt.Sprintf("chat_%d", g.ChatID)
+	}
+	tz := g.Timezone
+	if tz == "" {
+		tz = "UTC"
+	}
+	statusStr := h.trans.Group.StatusPending
+	if g.Approved {
+		statusStr = h.trans.Group.StatusApproved
+	}
+	typeStr := h.trans.Group.TypeRegular
+	if g.IsForum {
+		typeStr = h.trans.Group.TypeForum
+	}
+
+	text := fmt.Sprintf(h.trans.Group.GroupDetails, title, statusStr, tz, typeStr, g.ChatID)
+
+	var approveBtn models.InlineKeyboardButton
+	if g.Approved {
+		approveBtn = models.InlineKeyboardButton{
+			Text:         h.trans.Group.BtnReject,
+			CallbackData: fmt.Sprintf("disapprove:%d", g.ChatID),
+		}
+	} else {
+		approveBtn = models.InlineKeyboardButton{
+			Text:         h.trans.Group.BtnApprove,
+			CallbackData: fmt.Sprintf("approve:%d", g.ChatID),
+		}
+	}
+
+	rows := [][]models.InlineKeyboardButton{
+		{approveBtn},
+		{
+			{Text: h.trans.Group.BtnSetTimezone, CallbackData: fmt.Sprintf("grptz:sel:%d", g.ChatID)},
+			{Text: h.trans.Group.BtnToggleType, CallbackData: fmt.Sprintf("grptype:toggle:%d", g.ChatID)},
+		},
+		{
+			{Text: h.trans.Group.BtnBackToList, CallbackData: "grpd:list"},
+		},
+	}
+
+	b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      adminChatID,
+		MessageID:   msgID,
+		Text:        text,
+		ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows},
+	})
+}
+
+// handleGroupDetailCallback handles grpd: callbacks for the groups menu.
+// grpd:list      — return to the top-level groups list
+// grpd:{chatID}  — open the detail/config view for a group
+func (h *Handler) handleGroupDetailCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	data := strings.TrimPrefix(query.Data, "grpd:")
+	msg := query.Message.Message
+
+	if data == "list" {
+		h.sendGroupsList(ctx, b, msg.Chat.ID, msg.ID)
+		return
+	}
+
+	chatID, err := strconv.ParseInt(data, 10, 64)
+	if err != nil {
+		return
+	}
+	h.showGroupDetail(ctx, b, msg.Chat.ID, msg.ID, chatID)
 }
 
 func (h *Handler) handleGroupApproveCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
@@ -129,12 +192,12 @@ func (h *Handler) handleGroupApproveCallback(ctx context.Context, b *tgbot.Bot, 
 	log.Printf("✓ Group %d %s by @%s", chatID, action, query.From.Username)
 
 	msg := query.Message.Message
-	h.sendGroupsList(ctx, b, msg.Chat.ID, msg.ID)
+	h.showGroupDetail(ctx, b, msg.Chat.ID, msg.ID, chatID)
 }
 
 // handleGroupTypeCallback handles grptype: callbacks for toggling whether a group
 // is a forum (supports topics) or a regular group.
-// grptype:toggle:{chatID} — flip the is_forum flag and refresh the groups list.
+// grptype:toggle:{chatID} — flip the is_forum flag and refresh the detail view.
 func (h *Handler) handleGroupTypeCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
 	query := update.CallbackQuery
 	if query == nil {
@@ -161,13 +224,13 @@ func (h *Handler) handleGroupTypeCallback(ctx context.Context, b *tgbot.Bot, upd
 	log.Printf("✓ Group %d type toggled to is_forum=%v by @%s", chatID, !current, query.From.Username)
 
 	msg := query.Message.Message
-	h.sendGroupsList(ctx, b, msg.Chat.ID, msg.ID)
+	h.showGroupDetail(ctx, b, msg.Chat.ID, msg.ID, chatID)
 }
 
 // handleGroupTZCallback handles grptz: callbacks for group timezone management.
 // grptz:sel:{chatID}      — show timezone picker for group
-// grptz:set:{chatID}:{tz} — save timezone and return to groups list
-// grptz:back:{chatID}     — return to groups list without saving
+// grptz:set:{chatID}:{tz} — save timezone and return to the group detail view
+// grptz:back:{chatID}     — return to the group detail view without saving
 func (h *Handler) handleGroupTZCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
 	query := update.CallbackQuery
 	if query == nil {
@@ -207,10 +270,15 @@ func (h *Handler) handleGroupTZCallback(ctx context.Context, b *tgbot.Bot, updat
 			return
 		}
 		log.Printf("✓ Group %d timezone set to %q by @%s", chatID, tz, query.From.Username)
-		h.sendGroupsList(ctx, b, msg.Chat.ID, msg.ID)
+		h.showGroupDetail(ctx, b, msg.Chat.ID, msg.ID, chatID)
 
 	case strings.HasPrefix(data, "back:"):
-		h.sendGroupsList(ctx, b, msg.Chat.ID, msg.ID)
+		chatIDStr := strings.TrimPrefix(data, "back:")
+		chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+		if err != nil {
+			return
+		}
+		h.showGroupDetail(ctx, b, msg.Chat.ID, msg.ID, chatID)
 	}
 }
 

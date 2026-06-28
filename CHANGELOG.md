@@ -2,7 +2,11 @@
 
 ## [0.0.97]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Changed
+- **Admin `/groups` menu redesigned** as a drill-down: the top level now shows a clean list with one button per group (status + title), and selecting a group opens a detail view showing its status, timezone, type, and chat ID with all per-group actions (approve/reject, set timezone, toggle type) plus a "Back to list" button. Previously every group crammed its action buttons inline, which became unreadable with many groups.
+
+### Fixed
+- Groups list no longer renders a stray `%!s(MISSING)` line — the `registerGroups` header format string had an unused `%s` verb left over from an earlier layout.
 
 
 ## [0.0.96]
