@@ -274,12 +274,9 @@ type GroupMessages struct {
 	GroupDetails             string `yaml:"groupDetails"`
 	StatusApproved           string `yaml:"statusApproved"`
 	StatusPending            string `yaml:"statusPending"`
-	TypeForum                string `yaml:"typeForum"`
-	TypeRegular              string `yaml:"typeRegular"`
 	BtnApprove               string `yaml:"btnApprove"`
 	BtnReject                string `yaml:"btnReject"`
 	BtnSetTimezone           string `yaml:"btnSetTimezone"`
-	BtnToggleType            string `yaml:"btnToggleType"`
 	BtnBackToList            string `yaml:"btnBackToList"`
 }
 

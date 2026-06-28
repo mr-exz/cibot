@@ -103,12 +103,8 @@ func (h *Handler) showGroupDetail(ctx context.Context, b *tgbot.Bot, adminChatID
 	if g.Approved {
 		statusStr = h.trans.Group.StatusApproved
 	}
-	typeStr := h.trans.Group.TypeRegular
-	if g.IsForum {
-		typeStr = h.trans.Group.TypeForum
-	}
 
-	text := fmt.Sprintf(h.trans.Group.GroupDetails, title, statusStr, tz, typeStr, g.ChatID)
+	text := fmt.Sprintf(h.trans.Group.GroupDetails, title, statusStr, tz, g.ChatID)
 
 	var approveBtn models.InlineKeyboardButton
 	if g.Approved {
@@ -127,7 +123,6 @@ func (h *Handler) showGroupDetail(ctx context.Context, b *tgbot.Bot, adminChatID
 		{approveBtn},
 		{
 			{Text: h.trans.Group.BtnSetTimezone, CallbackData: fmt.Sprintf("grptz:sel:%d", g.ChatID)},
-			{Text: h.trans.Group.BtnToggleType, CallbackData: fmt.Sprintf("grptype:toggle:%d", g.ChatID)},
 		},
 		{
 			{Text: h.trans.Group.BtnBackToList, CallbackData: "grpd:list"},
@@ -190,38 +185,6 @@ func (h *Handler) handleGroupApproveCallback(ctx context.Context, b *tgbot.Bot, 
 		action = "disapproved"
 	}
 	log.Printf("✓ Group %d %s by @%s", chatID, action, query.From.Username)
-
-	msg := query.Message.Message
-	h.showGroupDetail(ctx, b, msg.Chat.ID, msg.ID, chatID)
-}
-
-// handleGroupTypeCallback handles grptype: callbacks for toggling whether a group
-// is a forum (supports topics) or a regular group.
-// grptype:toggle:{chatID} — flip the is_forum flag and refresh the detail view.
-func (h *Handler) handleGroupTypeCallback(ctx context.Context, b *tgbot.Bot, update *models.Update) {
-	query := update.CallbackQuery
-	if query == nil {
-		return
-	}
-	b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
-
-	chatIDStr := strings.TrimPrefix(query.Data, "grptype:toggle:")
-	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
-	if err != nil {
-		return
-	}
-
-	current, err := h.storage.IsGroupForum(ctx, chatID)
-	if err != nil {
-		log.Printf("❌ IsGroupForum %d: %v", chatID, err)
-		return
-	}
-
-	if err := h.storage.SetGroupIsForum(ctx, chatID, !current); err != nil {
-		log.Printf("❌ SetGroupIsForum %d: %v", chatID, err)
-		return
-	}
-	log.Printf("✓ Group %d type toggled to is_forum=%v by @%s", chatID, !current, query.From.Username)
 
 	msg := query.Message.Message
 	h.showGroupDetail(ctx, b, msg.Chat.ID, msg.ID, chatID)

@@ -224,15 +224,12 @@ group:
   selectGroup: "🏘️ Выберите группу:"
   selectTopic: "🏘 %s — выберите категорию:"
   groupsListHeader: "📋 Группы (%d одобрено, %d в ожидании)\n\nВыберите группу для настройки:"
-  groupDetails: "📋 %s\n\nСтатус: %s\nЧасовой пояс: %s\nТип: %s\nChat ID: %d"
+  groupDetails: "📋 %s\n\nСтатус: %s\nЧасовой пояс: %s\nChat ID: %d"
   statusApproved: "✅ Одобрена"
   statusPending: "⏳ Ожидает одобрения"
-  typeForum: "📋 Форум (с топиками)"
-  typeRegular: "💬 Обычная (без топиков)"
   btnApprove: "✅ Одобрить"
   btnReject: "❌ Отклонить"
   btnSetTimezone: "🕐 Часовой пояс"
-  btnToggleType: "🔀 Сменить тип"
   btnBackToList: "⬅️ К списку"
 
 user:

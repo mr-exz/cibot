@@ -224,15 +224,12 @@ group:
   selectGroup: "🏘️ Select group:"
   selectTopic: "🏘 %s — select category:"
   groupsListHeader: "📋 Groups (%d approved, %d pending)\n\nSelect a group to configure:"
-  groupDetails: "📋 %s\n\nStatus: %s\nTimezone: %s\nType: %s\nChat ID: %d"
+  groupDetails: "📋 %s\n\nStatus: %s\nTimezone: %s\nChat ID: %d"
   statusApproved: "✅ Approved"
   statusPending: "⏳ Pending approval"
-  typeForum: "📋 Forum (with topics)"
-  typeRegular: "💬 Regular (no topics)"
   btnApprove: "✅ Approve"
   btnReject: "❌ Reject"
   btnSetTimezone: "🕐 Timezone"
-  btnToggleType: "🔀 Toggle type"
   btnBackToList: "⬅️ Back to list"
 
 user:

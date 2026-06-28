@@ -2,7 +2,12 @@
 
 ## [0.0.98]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Fixed
+- **`/thread` and `/ticket` now work when replying to a message in non-forum groups.** In a non-forum supergroup, Telegram sets `message_thread_id` to the replied-to message's own ID for a normal reply, which made the "you replied to the topic header, not a real message" guard fire on every genuine reply and block the flow. That guard is now scoped to forum groups only (via Telegram's live `msg.Chat.IsForum` signal), so genuine replies in non-forum groups are accepted.
+- The "no categories" hint in `/ticket` / `/ticket_manual` now derives the group's forum status from the live `msg.Chat.IsForum` signal rather than the stored flag, so it is always accurate even right after a restart.
+
+### Removed
+- **Dropped the `is_forum` group flag** (column, auto-detection, the admin `/groups` "🔀 Toggle Type" button, and the Forum/Regular display in the group detail view). Forum status is now read live from Telegram (`msg.Chat.IsForum`) wherever it is needed, so the stored flag was redundant and could drift. Migration `015_drop_group_is_forum` removes the column.
 
 
 ## [0.0.97]

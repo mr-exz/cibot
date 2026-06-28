@@ -31,6 +31,15 @@ func techThreadKey(chatID int64, threadID int) string {
 // handleThread starts the /thread flow. Shows a category picker — the selected
 // category's Linear team key is used to create the issue.
 func (h *Handler) handleThread(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
+	// Diagnostic: log exactly what Telegram delivered so we can see why the reply guards trip.
+	replyID := 0
+	hasReply := msg.ReplyToMessage != nil
+	if hasReply {
+		replyID = msg.ReplyToMessage.ID
+	}
+	log.Printf("🔎 /thread entry: chat=%d isForum=%v threadID=%d isTopicMsg=%v hasReply=%v replyToID=%d msgID=%d",
+		msg.Chat.ID, msg.Chat.IsForum, msg.MessageThreadID, msg.IsTopicMessage, hasReply, replyID, msg.ID)
+
 	if h.cfg.TechGroupID == 0 {
 		h.sendMessage(ctx, b, msg, h.trans.Thread.TechGroupNotConfigured)
 		return
@@ -39,7 +48,12 @@ func (h *Handler) handleThread(ctx context.Context, b *tgbot.Bot, msg *models.Me
 		h.sendMessage(ctx, b, msg, h.trans.Thread.ReplyRequired)
 		return
 	}
-	if msg.MessageThreadID != 0 && msg.ReplyToMessage.ID == msg.MessageThreadID {
+	// Forum-only guard: in a forum topic, a message that "replies" to the topic header
+	// (reply ID == thread ID) is not a real user reply — reject it. In a non-forum group
+	// Telegram sets message_thread_id to the replied message's OWN id for normal replies,
+	// so reply ID == thread ID is a genuine reply there and must NOT be rejected.
+	// msg.Chat.IsForum is Telegram's live, authoritative signal for every message.
+	if msg.Chat.IsForum && msg.MessageThreadID != 0 && msg.ReplyToMessage.ID == msg.MessageThreadID {
 		h.sendMessage(ctx, b, msg, h.trans.Thread.ReplyToUserMessage)
 		return
 	}
@@ -139,6 +153,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 
 	issue, err := h.linear.CreateIssue(ctx, title, description, pending.TeamKey, assignee, []string{pending.CategoryName}, 0)
 	if err != nil {
+		log.Printf("❌ /thread CreateIssue (team %q, category %q): %v", pending.TeamKey, pending.CategoryName, err)
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    pending.ChatID,
 			MessageID: pending.MessageID,
@@ -152,6 +167,7 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 		Name:   issue.Identifier,
 	})
 	if err != nil {
+		log.Printf("❌ /thread CreateForumTopic in tech group %d (issue %s): %v", h.cfg.TechGroupID, issue.Identifier, err)
 		b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
 			ChatID:    pending.ChatID,
 			MessageID: pending.MessageID,
@@ -160,21 +176,27 @@ func (h *Handler) completeTechThread(ctx context.Context, b *tgbot.Bot, pending 
 		return
 	}
 
-	b.ForwardMessage(ctx, &tgbot.ForwardMessageParams{
+	if _, err := b.ForwardMessage(ctx, &tgbot.ForwardMessageParams{
 		ChatID:          h.cfg.TechGroupID,
 		MessageThreadID: topic.MessageThreadID,
 		FromChatID:      pending.ChatID,
 		MessageID:       pending.SourceMsgID,
-	})
+	}); err != nil {
+		log.Printf("⚠️ /thread ForwardMessage from chat %d msg %d to tech topic %d: %v",
+			pending.ChatID, pending.SourceMsgID, topic.MessageThreadID, err)
+	}
 
 	// Notify reporter in original chat about the new thread
 	if pending.ReporterUsername != "" {
 		mentionMsg := fmt.Sprintf(h.trans.Thread.MentionNotification, pending.ReporterUsername, issue.Identifier)
-		b.SendMessage(ctx, &tgbot.SendMessageParams{
+		if _, err := b.SendMessage(ctx, &tgbot.SendMessageParams{
 			ChatID:          pending.ChatID,
 			MessageThreadID: pending.ThreadID,
 			Text:            mentionMsg,
-		})
+		}); err != nil {
+			log.Printf("⚠️ /thread mention notify in source chat %d (thread %d): %v",
+				pending.ChatID, pending.ThreadID, err)
+		}
 	}
 
 	onCallLine := h.trans.Thread.OnCallUnassigned

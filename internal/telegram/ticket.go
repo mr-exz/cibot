@@ -21,10 +21,13 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		return
 	}
 
-	// In forum/topic groups every message implicitly "replies" to the topic header
-	// (the service message that created the topic), whose ID equals the thread ID.
-	// This is not a real user reply — show an error.
-	if msg.MessageThreadID != 0 && msg.ReplyToMessage.ID == msg.MessageThreadID {
+	// Forum-only guard: in a forum topic every message implicitly "replies" to the topic
+	// header (the service message that created the topic), whose ID equals the thread ID —
+	// that is not a real user reply. In a non-forum group Telegram instead sets
+	// message_thread_id to the replied message's OWN id for normal replies, so reply ID ==
+	// thread ID is a genuine reply there and must NOT be rejected.
+	// msg.Chat.IsForum is Telegram's live, authoritative signal for every message.
+	if msg.Chat.IsForum && msg.MessageThreadID != 0 && msg.ReplyToMessage.ID == msg.MessageThreadID {
 		h.sendMessage(ctx, b, msg, h.trans.Ticket.ReplyToUserMessage)
 		return
 	}
@@ -65,7 +68,7 @@ func (h *Handler) handleTicketStart(ctx context.Context, b *tgbot.Bot, msg *mode
 		if msg.Chat.Type == "private" {
 			h.sendMessage(ctx, b, msg, h.trans.Ticket.MustBeInGroup)
 		} else {
-			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID))
+			h.sendMessage(ctx, b, msg, h.buildUnconfiguredTopicMsg(ctx, msg.Chat.ID, msg.Chat.IsForum))
 		}
 		return
 	}
@@ -142,12 +145,8 @@ func (h *Handler) handleCancelCallback(ctx context.Context, b *tgbot.Bot, update
 
 // buildUnconfiguredTopicMsg returns a message for when /ticket is used in a group with no categories.
 // For forum groups, lists topics with categories. For regular groups, suggests /ticket_manual.
-func (h *Handler) buildUnconfiguredTopicMsg(ctx context.Context, chatID int64) string {
-	isForum, err := h.storage.IsGroupForum(ctx, chatID)
-	if err != nil {
-		return h.trans.Thread.NoCategories
-	}
-
+// isForum is Telegram's live signal (msg.Chat.IsForum) for the calling message's chat.
+func (h *Handler) buildUnconfiguredTopicMsg(ctx context.Context, chatID int64, isForum bool) string {
 	if !isForum {
 		return h.trans.Thread.NoCategories + "\n\nUse /ticket_manual to create a ticket without replying to a message."
 	}
