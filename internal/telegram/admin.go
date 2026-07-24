@@ -559,17 +559,24 @@ func (h *Handler) handleRotation(ctx context.Context, b *tgbot.Bot, msg *models.
 		return tz
 	}
 
+	allPersons, err := h.storage.ListAllSupportPersons(ctx)
+	if err != nil {
+		log.Printf("❌ ListAllSupportPersons: %v", err)
+	}
+	byID := personsByID(allPersons)
+
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Rotation overview — %s\n", now.Format("Mon 2 Jan")))
 
 	for _, r := range rotations {
-		sb.WriteString("\n")
+		var cb strings.Builder
+		cb.WriteString("\n")
 
 		// Scope header
 		cat := r.Category
 		groupTZ := getGroupTZ(cat.ChatID)
 		if cat.ChatID == nil {
-			sb.WriteString("[Global]\n")
+			cb.WriteString("[Global]\n")
 		} else {
 			groupName := h.getGroupName(*cat.ChatID)
 			if cat.ThreadID != nil {
@@ -578,36 +585,54 @@ func (h *Handler) handleRotation(ctx context.Context, b *tgbot.Bot, msg *models.
 				if topicName == "" {
 					topicName = fmt.Sprintf("thread %d", *cat.ThreadID)
 				}
-				sb.WriteString(fmt.Sprintf("[%s / %s]\n", groupName, topicName))
+				cb.WriteString(fmt.Sprintf("[%s / %s]\n", groupName, topicName))
 			} else {
-				sb.WriteString(fmt.Sprintf("[%s]\n", groupName))
+				cb.WriteString(fmt.Sprintf("[%s]\n", groupName))
 			}
 		}
 
 		// Category + rotation type
-		sb.WriteString(fmt.Sprintf("  %s %s (%s)\n", cat.Emoji, cat.Name, r.RotationType))
+		cb.WriteString(fmt.Sprintf("  %s %s (%s)\n", cat.Emoji, cat.Name, r.RotationType))
 
 		// On-duty person
 		p := r.OnDuty
 		dutyIndicator := personIndicator(p, r.Online, now)
-		sb.WriteString(fmt.Sprintf("  On duty: %s (@%s) %s\n", p.Name, p.TelegramUsername, dutyIndicator))
-		sb.WriteString(fmt.Sprintf("  Linear: @%s\n", p.LinearUsername))
+		cb.WriteString(fmt.Sprintf("  On duty: %s (@%s) %s\n", p.Name, p.TelegramUsername, dutyIndicator))
+		cb.WriteString(fmt.Sprintf("  Linear: @%s\n", p.LinearUsername))
 
 		if p.WorkHours != "" {
 			displayHours := convertWorkHours(p.WorkHours, p.Timezone, groupTZ)
-			sb.WriteString(fmt.Sprintf("  Hours: %s %s | Days: %s\n", displayHours, groupTZ, p.WorkDays))
+			cb.WriteString(fmt.Sprintf("  Hours: %s %s | Days: %s\n", displayHours, groupTZ, p.WorkDays))
 		}
 
 		// Full team
-		sb.WriteString("  Team:\n")
+		cb.WriteString("  Team:\n")
 		for i, tp := range r.AllPersons {
 			ind := personIndicator(&tp, isPersonOnlineNow(&tp, now), now)
 			marker := ""
 			if tp.ID == p.ID {
 				marker = " <- on duty"
 			}
-			sb.WriteString(fmt.Sprintf("    %d. %s (@%s) %s%s\n", i+1, tp.Name, tp.TelegramUsername, ind, marker))
+			cb.WriteString(fmt.Sprintf("    %d. %s (@%s) %s%s\n", i+1, tp.Name, tp.TelegramUsername, ind, marker))
 		}
+
+		// Stored schedule: the materialized turns as they are in the database.
+		// The effective assignee can still differ if the scheduled person is
+		// offline or absent when a ticket is created.
+		turns, err := h.storage.ListScheduledTurns(ctx, cat.ID, now)
+		if err != nil {
+			log.Printf("❌ ListScheduledTurns category %d: %v", cat.ID, err)
+		} else {
+			cb.WriteString("  Schedule:\n")
+			cb.WriteString(formatScheduleTurns(turns, byID, now, "    "))
+		}
+
+		// Telegram messages are capped at 4096 chars: flush before overflowing.
+		if sb.Len()+cb.Len() > 3500 {
+			h.sendMessage(ctx, b, msg, strings.TrimRight(sb.String(), "\n"))
+			sb.Reset()
+		}
+		sb.WriteString(cb.String())
 	}
 
 	h.sendMessage(ctx, b, msg, strings.TrimRight(sb.String(), "\n"))

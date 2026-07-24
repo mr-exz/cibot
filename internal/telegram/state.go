@@ -30,6 +30,7 @@ const (
 	AdminCmdAddPersonToCategory AdminCmd = "addpersontocategory"
 	AdminCmdTakeover            AdminCmd = "takeover"
 	AdminCmdEditCategory        AdminCmd = "editcategory"
+	AdminCmdRearrange           AdminCmd = "rearrange"
 )
 
 // Step constants for the multi-step issue creation flow
@@ -93,6 +94,9 @@ const (
 	// takeover steps
 	StepAdminTakeoverPerson   = "admin_takeover_person"
 	StepAdminTakeoverDuration = "admin_takeover_duration"
+
+	// rearrange steps
+	StepAdminRearrangeConfirm = "admin_rearrange_confirm"
 
 	// dns steps
 	StepDNSMenu       = "dns_menu"

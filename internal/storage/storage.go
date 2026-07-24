@@ -1037,8 +1037,10 @@ func (d *DB) GetOpenTechThreads(ctx context.Context) ([]TechThread, error) {
 // === Helper to create initial assignment ===
 
 func (d *DB) CreateInitialAssignment(ctx context.Context, categoryID int64, supportPersonID int64, rotationType string, startDate string) error {
+	// OR IGNORE: re-adding a person already in the category is a no-op rather
+	// than a duplicate pool entry (idx_assignments_cat_person).
 	_, err := d.db.ExecContext(ctx,
-		"INSERT INTO support_assignments (category_id, support_person_id, rotation_type, start_date) VALUES (?, ?, ?, ?)",
+		"INSERT OR IGNORE INTO support_assignments (category_id, support_person_id, rotation_type, start_date) VALUES (?, ?, ?, ?)",
 		categoryID, supportPersonID, rotationType, startDate)
 	return err
 }
@@ -1157,7 +1159,26 @@ func (d *DB) ensureRotationGenerated(ctx context.Context, categoryID int64, now 
 		lastStart, lastPersonID = seedStart, seedPersonID
 	}
 
-	ids := personIDs(pool)
+	for _, turn := range planTurns(lastStart, lastPersonID, personIDs(pool), weekly, workdays, horizonEnd) {
+		if err := d.insertTurn(ctx, categoryID, turn.Start, turn.PersonID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ScheduleTurn is one materialized rotation turn: PersonID is on duty from
+// Start until the next turn's Start.
+type ScheduleTurn struct {
+	Start    time.Time
+	PersonID int64
+}
+
+// planTurns computes the turns that extend a schedule whose last turn is
+// (lastStart, lastPersonID) up to but not including horizonEnd. Pure planning:
+// nothing is written.
+func planTurns(lastStart time.Time, lastPersonID int64, ids []int64, weekly bool, workdays map[int]bool, horizonEnd time.Time) []ScheduleTurn {
+	var turns []ScheduleTurn
 	for guard := 0; guard < 400; guard++ {
 		var nextStart time.Time
 		if weekly {
@@ -1169,12 +1190,89 @@ func (d *DB) ensureRotationGenerated(ctx context.Context, categoryID int64, now 
 			break
 		}
 		nextPersonID := nextPersonAfter(ids, lastPersonID)
-		if err := d.insertTurn(ctx, categoryID, nextStart, nextPersonID); err != nil {
-			return err
-		}
+		turns = append(turns, ScheduleTurn{Start: nextStart, PersonID: nextPersonID})
 		lastStart, lastPersonID = nextStart, nextPersonID
 	}
-	return nil
+	return turns
+}
+
+// ListScheduledTurns returns the materialized turns that cover from and later,
+// ascending: the turn in progress at from (if any) plus all future turns.
+func (d *DB) ListScheduledTurns(ctx context.Context, categoryID int64, from time.Time) ([]ScheduleTurn, error) {
+	rows, err := d.db.QueryContext(ctx,
+		`SELECT turn_start, support_person_id FROM rotation_schedule
+		 WHERE category_id = ? AND turn_start >= COALESCE(
+		   (SELECT MAX(turn_start) FROM rotation_schedule WHERE category_id = ? AND turn_start <= ?), '')
+		 ORDER BY turn_start`,
+		categoryID, categoryID, dateKey(from))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var turns []ScheduleTurn
+	for rows.Next() {
+		var startStr string
+		var personID int64
+		if err := rows.Scan(&startStr, &personID); err != nil {
+			return nil, err
+		}
+		start, err := time.Parse("2006-01-02", startStr)
+		if err != nil {
+			return nil, err
+		}
+		turns = append(turns, ScheduleTurn{Start: start, PersonID: personID})
+	}
+	return turns, rows.Err()
+}
+
+// PreviewRegeneratedTurns computes the schedule RegenerateUpcomingTurns would
+// leave in place from today on, without writing anything: the turn in progress
+// today stays, and future turns are replanned from the current pool.
+func (d *DB) PreviewRegeneratedTurns(ctx context.Context, categoryID int64, now time.Time) ([]ScheduleTurn, error) {
+	pool, err := d.ListSupportPersonsForCategory(ctx, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	if len(pool) == 0 {
+		return nil, nil
+	}
+	rotationType, err := d.categoryRotationType(ctx, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	weekly := rotationType == "weekly"
+	workdays := workingDaysSetForPool(pool)
+	horizonEnd := mondayOf(now).AddDate(0, 0, 14)
+
+	lastStart, lastPersonID, ok, err := d.currentTurn(ctx, categoryID, now)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		// No turn covers today: preview the same seed ensureRotationGenerated would insert.
+		lastStart = mondayOf(now)
+		if !weekly {
+			lastStart = calDate(now)
+		}
+		lastPersonID, err = d.legacyBaseDutyPersonID(ctx, categoryID, now)
+		if err != nil {
+			return nil, err
+		}
+	}
+	turns := []ScheduleTurn{{Start: lastStart, PersonID: lastPersonID}}
+	return append(turns, planTurns(lastStart, lastPersonID, personIDs(pool), weekly, workdays, horizonEnd)...), nil
+}
+
+// RegenerateUpcomingTurns drops all turns after today and regenerates them from
+// the current pool. Today's turn and past history are preserved.
+func (d *DB) RegenerateUpcomingTurns(ctx context.Context, categoryID int64, now time.Time) error {
+	if _, err := d.db.ExecContext(ctx,
+		"DELETE FROM rotation_schedule WHERE category_id = ? AND turn_start > ?",
+		categoryID, dateKey(now)); err != nil {
+		return err
+	}
+	return d.ensureRotationGenerated(ctx, categoryID, now)
 }
 
 // reassignAfterRemoval keeps history intact while handing the removed person's
@@ -1264,18 +1362,30 @@ func (d *DB) categoryRotationType(ctx context.Context, categoryID int64) (string
 }
 
 func (d *DB) lookupTurnPerson(ctx context.Context, categoryID int64, date time.Time) (int64, bool, error) {
-	var id int64
+	_, id, ok, err := d.currentTurn(ctx, categoryID, date)
+	return id, ok, err
+}
+
+// currentTurn returns the turn covering date: the one with the greatest
+// turn_start on or before date.
+func (d *DB) currentTurn(ctx context.Context, categoryID int64, date time.Time) (time.Time, int64, bool, error) {
+	var startStr string
+	var personID int64
 	err := d.db.QueryRowContext(ctx,
-		"SELECT support_person_id FROM rotation_schedule "+
+		"SELECT turn_start, support_person_id FROM rotation_schedule "+
 			"WHERE category_id = ? AND turn_start <= ? ORDER BY turn_start DESC LIMIT 1",
-		categoryID, dateKey(date)).Scan(&id)
+		categoryID, dateKey(date)).Scan(&startStr, &personID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, false, nil
+		return time.Time{}, 0, false, nil
 	}
 	if err != nil {
-		return 0, false, err
+		return time.Time{}, 0, false, err
 	}
-	return id, true, nil
+	start, err := time.Parse("2006-01-02", startStr)
+	if err != nil {
+		return time.Time{}, 0, false, err
+	}
+	return start, personID, true, nil
 }
 
 func (d *DB) latestTurn(ctx context.Context, categoryID int64) (time.Time, int64, bool, error) {

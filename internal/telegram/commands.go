@@ -95,10 +95,17 @@ func (h *Handler) registerCommands() []commandDef {
 		},
 		{
 			Name:      "rotation",
-			Desc:      "Show current on-duty people",
+			Desc:      "Show current on-duty people and the stored schedule",
 			Group:     "Admin",
 			AdminOnly: true,
 			Handler:   h.handleRotation,
+		},
+		{
+			Name:      "rearrange",
+			Desc:      "Rebuild future rotation days for a category from the current team",
+			Group:     "Admin",
+			AdminOnly: true,
+			Handler:   h.handleRearrange,
 		},
 		{
 			Name:      "groups",

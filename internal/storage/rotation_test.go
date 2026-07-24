@@ -156,3 +156,85 @@ func TestDailyRotation(t *testing.T) {
 		}
 	}
 }
+
+// TestRegenerateUpcomingTurns reproduces a category whose first person was
+// added alone (pre-filling the whole horizon with them) and checks that
+// regeneration keeps today but lets the rest of the pool in from tomorrow.
+func TestRegenerateUpcomingTurns(t *testing.T) {
+	db, ctx := newTestDB(t)
+	mon := mondayOf(time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC))
+
+	catID, err := db.AddCategoryWithTopic(ctx, "cat", "🛟", "TEAM", nil, nil)
+	if err != nil {
+		t.Fatalf("AddCategoryWithTopic: %v", err)
+	}
+
+	// First person alone: the horizon materializes with only them.
+	alice := addPerson(t, db, ctx, "alice")
+	if err := db.CreateInitialAssignment(ctx, catID, alice, "daily", dateKey(mon)); err != nil {
+		t.Fatalf("CreateInitialAssignment(alice): %v", err)
+	}
+	if err := db.EnsureRotationGenerated(ctx, catID, mon); err != nil {
+		t.Fatalf("EnsureRotationGenerated: %v", err)
+	}
+
+	bob := addPerson(t, db, ctx, "bob")
+	if err := db.CreateInitialAssignment(ctx, catID, bob, "daily", dateKey(mon)); err != nil {
+		t.Fatalf("CreateInitialAssignment(bob): %v", err)
+	}
+
+	// Without regeneration the pre-filled horizon keeps alice on duty all week.
+	if got := onDuty(t, db, ctx, catID, mon.AddDate(0, 0, 3)); got != alice {
+		t.Fatalf("pre-regenerate day3: got %d, want alice(%d)", got, alice)
+	}
+
+	preview, err := db.PreviewRegeneratedTurns(ctx, catID, mon)
+	if err != nil {
+		t.Fatalf("PreviewRegeneratedTurns: %v", err)
+	}
+	if err := db.RegenerateUpcomingTurns(ctx, catID, mon); err != nil {
+		t.Fatalf("RegenerateUpcomingTurns: %v", err)
+	}
+
+	// The preview must match what was actually written.
+	actual, err := db.ListScheduledTurns(ctx, catID, mon)
+	if err != nil {
+		t.Fatalf("ListScheduledTurns: %v", err)
+	}
+	if len(preview) != len(actual) {
+		t.Fatalf("preview/actual length mismatch: %d vs %d", len(preview), len(actual))
+	}
+	for i := range preview {
+		if !preview[i].Start.Equal(actual[i].Start) || preview[i].PersonID != actual[i].PersonID {
+			t.Fatalf("turn %d: preview %s/%d, actual %s/%d",
+				i, dateKey(preview[i].Start), preview[i].PersonID, dateKey(actual[i].Start), actual[i].PersonID)
+		}
+	}
+
+	// Today stays with alice; from tomorrow the rotation alternates.
+	want := []int64{alice, bob, alice, bob, alice}
+	for i, w := range want {
+		if got := onDuty(t, db, ctx, catID, mon.AddDate(0, 0, i)); got != w {
+			t.Fatalf("post-regenerate day%d: got %d, want %d", i, got, w)
+		}
+	}
+}
+
+// TestDuplicateAssignmentIgnored checks that re-adding a person to a category
+// does not create a duplicate pool entry (which would stall the rotation).
+func TestDuplicateAssignmentIgnored(t *testing.T) {
+	db, ctx := newTestDB(t)
+	mon := mondayOf(time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC))
+	catID, ids := setupCategory(t, db, ctx, "daily", dateKey(mon), "alice", "bob")
+
+	if err := db.CreateInitialAssignment(ctx, catID, ids["alice"], "daily", dateKey(mon)); err != nil {
+		t.Fatalf("duplicate CreateInitialAssignment: %v", err)
+	}
+	pool, err := db.ListSupportPersonsForCategory(ctx, catID)
+	if err != nil {
+		t.Fatalf("ListSupportPersonsForCategory: %v", err)
+	}
+	if len(pool) != 2 {
+		t.Fatalf("pool size after duplicate add: got %d, want 2", len(pool))
+	}
+}

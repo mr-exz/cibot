@@ -797,6 +797,9 @@ func (h *Handler) handleAdminCategoryCallback(ctx context.Context, b *tgbot.Bot,
 	case AdminCmdTakeover:
 		// Delegate to takeover handler
 		h.handleTakeoverCategorySelected(ctx, b, admin, cat)
+
+	case AdminCmdRearrange:
+		h.handleRearrangeCategorySelected(ctx, b, admin, cat)
 	}
 }
 

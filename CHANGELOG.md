@@ -2,7 +2,17 @@
 
 ## [0.0.100]
 
-<!-- Prepare for next release: remove this line and write your release notes -->
+### Added
+- **`/rotation` now shows the stored schedule.** Below each category's team list, the command prints the materialized rotation turns exactly as they are in the database (`Schedule:` block, one line per turn, with a `<- today` marker), so admins can see who is actually planned for the coming days instead of only who is on duty right now. Long output is split across multiple messages to stay under Telegram's 4096-character limit.
+- **New admin command `/rearrange`** — rebuilds the future rotation days of a category from its current team. Pick a category, review a side-by-side "Current schedule" / "After rearrange" preview, and confirm. Past days and today's turn are never touched; only turns from tomorrow onward are regenerated. Use it when the planned schedule no longer matches the team — e.g. after adding people to a category whose horizon was already generated.
+- Migration `016_assignment_unique`: duplicate person↔category assignment rows are removed and a unique index prevents new ones. A duplicated pool entry would make the turn generator hand every future turn to that person forever. Re-adding a person to a category they are already in is now a silent no-op.
+
+### Fixed
+- **New team members could wait up to two weeks before entering the rotation.** The schedule is materialized through the end of next week, and existing turns are never rewritten. So when a category was created and its first person added, the whole horizon filled with that one person; people added moments later only entered the rotation once turns beyond the horizon were generated. `/rearrange` gives admins a direct way out of this state.
+
+### How duty rotation and task assignment work
+- **Rotation schedule**: each category has a materialized schedule of "turns" in the database (one per working day for daily rotation, one per week for weekly). Turns are generated ahead through the end of next week, walking the team in order of who was added first. Generated turns are frozen: past days are history and are never rewritten; roster changes only affect turns that have not been generated yet (or regenerate future days via `/rearrange` / when a person is removed).
+- **Task assignment**: when a ticket is created, the bot starts from the scheduled person for today but assigns the first person who is currently *online* (inside their configured work hours and not absent), walking forward through the team in order. So a ticket created before the scheduled person's workday starts goes to a teammate who is already online — which can legitimately differ from what `/oncall` and `/rotation` show as "on duty". If nobody is online, the ticket is assigned to the scheduled person with an "outside working hours" note.
 
 
 ## [0.0.99]
